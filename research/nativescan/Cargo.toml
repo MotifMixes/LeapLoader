@@ -1,0 +1,13 @@
+[package]
+name = "nativescan"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Research tool: finds absolute addresses in a Leapster cartridge's native ARC code, for relocating it to the SD load address"
+
+# Standalone, like sdboot-emu: needs a local Ribbit checkout next to LeapLoader.
+[workspace]
+
+[dependencies]
+ribbit-core = { path = "../../../Ribbit/crates/ribbit-core" }
+ribbit-cpu = { path = "../../../Ribbit/crates/ribbit-cpu" }

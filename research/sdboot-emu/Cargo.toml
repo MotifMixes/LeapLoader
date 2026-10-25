@@ -1,0 +1,22 @@
+[package]
+name = "sdboot-emu"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Research harness: runs a Leapster 2 BIOS in Ribbit's emulator with a prepared SD card, to test the BIOS's SD boot path"
+
+# Standalone: not part of any LeapLoader workspace, and it needs a local Ribbit checkout next to LeapLoader.
+[workspace]
+
+[dependencies]
+ribbit-core = { path = "../../../Ribbit/crates/ribbit-core" }
+ribbit-memory = { path = "../../../Ribbit/crates/ribbit-memory" }
+ribbit-debug = { path = "../../../Ribbit/crates/ribbit-debug" }
+ribbit-video = { path = "../../../Ribbit/crates/ribbit-video" }
+ribbit-input = { path = "../../../Ribbit/crates/ribbit-input" }
+fatfs = "0.3.6"
+png = "0.18"
+minifb = "0.28"
+
+[profile.release]
+debug = 1

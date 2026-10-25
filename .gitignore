@@ -1,0 +1,34 @@
+# Personal files: ROM/BIOS dumps and anything derived from them (e.g. the SoundFont,
+# packed cartridges, SD card images). They must never be committed.
+*.bin
+*.BIN
+*.rom
+*.nvram
+*.zip
+*.7z
+*.img
+*.state
+*.sav
+*.eeprom
+*.swf
+*.sf2
+*.wav
+*.lfp
+*.relocs
+/LSTR-*.lfp
+/local/
+/roms/
+# Personal list of the user's game collection.
+/missing-leapster-games.txt
+
+# Build output (any depth: app/target, research/sdboot-emu/target, research/nativescan/target).
+target/
+target-*/
+
+# Editor files (REAPER waveform cache).
+*.reapeaks
+
+# Local Claude Code settings and Python caches.
+.claude/
+__pycache__/
+*.pyc

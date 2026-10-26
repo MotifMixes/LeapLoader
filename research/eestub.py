@@ -44,6 +44,7 @@ import subprocess
 import tempfile
 
 TOOLS = os.environ.get("ARC_GNU", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Ribbit", "tools", "arc-gnu"))
+EXE = ".exe" if os.name == "nt" else ""  # the binutils' file names on this system
 NATIVE_NAME = "__llEE"
 KEYS_FLAG = 1 << 29
 # ButtonMPI GetButtonState word 0 = pressed buttons: A, B, HINT (as nativechip.COMBO)
@@ -610,7 +611,7 @@ def build(address, size=256, path="b:\\save.dat"):
     src = (SOURCE.replace("SYSTEM_DEVICE", str(SYSTEM_DEVICE)).replace("COMBO", str(COMBO))
            .replace("KEYS_FLAG", str(KEYS_FLAG)).replace("MASK", str(size - 1)).replace("SIZE", str(size))
            .replace("QUIET", str(QUIET)).replace("FALLBACK_POLLS", str(FALLBACK_POLLS)).replace("PATH", path.replace("\\", "\\\\")))
-    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}.exe")
+    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("stub.s", "stub.o", "stub.elf", "stub.bin"))
         open(s, "w").write(src)

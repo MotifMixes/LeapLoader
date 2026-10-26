@@ -25,7 +25,8 @@ SIGNATURE = b"Copyright LeapFrog"
 KNOWN_TAGS = {0x1003, 0x1005, 0x1006, 0x100C, 0x2000}
 # Native code (helper libraries) and its function tables: relocated with nativescan's list.
 NATIVE_TAGS = {0x1000, 0x1001, 0x1009, 0x100D, 0x3001}
-NATIVESCAN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nativescan", "target", "release", "nativescan.exe")
+NATIVESCAN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nativescan", "target", "release",
+                          "nativescan.exe" if os.name == "nt" else "nativescan")
 
 
 class Unsupported(Exception):
@@ -86,7 +87,7 @@ def native_relocs(path):
 
 
 def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="LeapLoader", app_dir=None):
-    """`save_path`: when given (e.g. b:\Leapster\Apps\Game\save.dat), the game's saves go to
+    r"""`save_path`: when given (e.g. b:\Leapster\Apps\Game\save.dat), the game's saves go to
     that SD file through saveshim.py; None leaves the save calls as they are (no saves).
     `strict_checksum=False` converts a dump whose header checksum does not match (some dumps never
     had one written: Ni Hao Kai-lan's is erased); the SD image always gets a correct one."""

@@ -19,6 +19,7 @@ import subprocess
 import tempfile
 
 TOOLS = os.environ.get("ARC_GNU", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Ribbit", "tools", "arc-gnu"))
+EXE = ".exe" if os.name == "nt" else ""  # the binutils' file names on this system
 FOPEN, FREAD, FWRITE, FCLOSE, MALLOC = 0x400F0830, 0x400F0890, 0x400F09C8, 0x400F06A0, 0x400F1FDC
 SYSTEM_DEVICE = 0
 # ButtonMPI GetButtonState word 0 = pressed buttons (GPIO bits inverted, as Ribbit's masks): A, B, HINT
@@ -428,7 +429,7 @@ def build(address, size, path, originals):
     for name, value in (("FOPEN", FOPEN), ("FREAD", FREAD), ("FWRITE", FWRITE), ("FCLOSE", FCLOSE), ("MALLOC", MALLOC)):
         src = src.replace(f"mov     r1, {name}\n", f"mov     r1, {value:#x}\n").replace(
             f"mov     r2, {name}\n", f"mov     r2, {value:#x}\n").replace(f"mov     r4, {name}\n", f"mov     r4, {value:#x}\n")
-    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}.exe")
+    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b, m = (os.path.join(t, n) for n in ("chip.s", "chip.o", "chip.elf", "chip.bin", "chip.map"))
         open(s, "w").write(src)

@@ -63,6 +63,8 @@ pub enum Action {
     StopBuild,
     OpenFolder(PathBuf),
     SettingsChanged,
+    /// The update is installed: start the new version and quit.
+    RestartForUpdate,
 }
 
 /// What the window shows that lives elsewhere (app.rs).
@@ -101,6 +103,15 @@ pub struct UiState {
     pub problem: Option<(String, String)>,
     /// A message in the status bar.
     pub message: Option<String>,
+    /// The update check and the in-app update (updates.rs, install.rs).
+    pub updates: crate::updates::Updates,
+    pub show_updates: bool,
+    /// The release whose notes to open in the updates window.
+    pub notes_open: Option<String>,
+    /// A newer release found at start-up was shown (once).
+    pub update_announced: bool,
+    /// The restart into an installed update was asked for (once).
+    pub restarting: bool,
 }
 
 impl UiState {
@@ -124,6 +135,21 @@ const CARD: egui::Color32 = egui::Color32::from_rgb(22, 26, 24);
 
 pub fn draw(ui: &mut egui::Ui, st: &mut UiState, settings: &mut Settings, info: &Info, actions: &mut Vec<Action>) {
     let ctx = ui.ctx().clone();
+    if settings.check_for_updates && !st.updates.checked() {
+        st.updates.check(&ctx);
+    }
+    // A newer release found at start-up pops up once (not for a skipped one),
+    // after the first-start note.
+    if settings.ai_notice_seen
+        && !st.update_announced
+        && let Some(r) = st.updates.newer()
+    {
+        st.update_announced = true;
+        if r.tag != settings.skipped_update {
+            st.show_updates = true;
+            st.notes_open = None;
+        }
+    }
     egui::Panel::top("menu").show(ui, |ui| menu_bar(ui, st, settings, info, actions));
     egui::Panel::bottom("status").show(ui, |ui| status_bar(ui, st, info));
     // The card's panel the window's full height (the log only under the
@@ -185,12 +211,196 @@ fn menu_bar(ui: &mut egui::Ui, st: &mut UiState, settings: &mut Settings, info: 
             }
         });
         ui.menu_button("Help", |ui| {
+            if ui.button("Check for updates…").clicked() {
+                st.updates.check(ui.ctx());
+                st.show_updates = true;
+                st.notes_open = None;
+                ui.close();
+            }
             if ui.button("About LeapLoader").clicked() {
                 st.show_about = true;
                 ui.close();
             }
         });
+        // Right after the menus (Ribbit's update button).
+        if let Some(r) = st.updates.newer() {
+            ui.add_space(8.0);
+            let text = egui::RichText::new(format!("⬆ Update to {}", r.version_text())).color(egui::Color32::WHITE);
+            if ui.add(egui::Button::new(text).fill(ACCENT)).on_hover_text("See what's new and install it").clicked() {
+                st.show_updates = true;
+                st.notes_open = Some(r.tag);
+            }
+        }
     });
+}
+
+/// The updates window (Ribbit's): whether a newer release is out, the update
+/// itself, and the patch notes of every release.
+fn updates_window(
+    ctx: &egui::Context,
+    st: &mut UiState,
+    settings: &mut Settings,
+    info: &Info,
+    actions: &mut Vec<Action>,
+) {
+    use crate::install::State as Install;
+    use crate::updates::{CURRENT, Status, long_date, notes_ui, parse_version};
+    let mut open = st.show_updates;
+    let mut close = false;
+    egui::Window::new("Updates and patch notes")
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(true)
+        .default_width(520.0)
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(ctx.content_rect().center())
+        .show(ctx, |ui| {
+            let status = st.updates.status();
+            let newer = st.updates.newer();
+            match (&status, &newer) {
+                (Status::Checking, _) => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label("Checking for updates…");
+                    });
+                }
+                (Status::Failed(why), _) => {
+                    ui.label(format!("Couldn't check for updates: {why}."));
+                    if ui.button("Try again").clicked() {
+                        st.updates.check(ctx);
+                    }
+                }
+                (Status::Done(_), Some(r)) => {
+                    ui.heading(format!("LeapLoader {} is available", r.version_text()));
+                    ui.label(format!("You have version {CURRENT}. Released {}.", long_date(&r.date)));
+                    ui.add_space(4.0);
+                    let package = crate::install::installable(r);
+                    let install = st.updates.installer.state();
+                    match &install {
+                        Install::Downloading { done, total } => {
+                            let mb = |b: u64| b as f32 / 1_048_576.0;
+                            let part = if *total > 0 { *done as f32 / *total as f32 } else { 0.0 };
+                            let text = format!("Downloading… {:.1} of {:.1} MB", mb(*done), mb(*total));
+                            ui.add(egui::ProgressBar::new(part).text(text));
+                        }
+                        Install::Installing | Install::Ready => {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label(if install == Install::Ready {
+                                    "Restarting LeapLoader…"
+                                } else {
+                                    "Installing…"
+                                });
+                            });
+                        }
+                        Install::Idle | Install::Failed(_) => {
+                            if let Install::Failed(why) = &install {
+                                ui.colored_label(SKIP_RED, format!("The update didn't install: {why}."));
+                            }
+                            ui.horizontal(|ui| {
+                                if let Ok(asset) = &package {
+                                    let text = egui::RichText::new("Update now").color(egui::Color32::WHITE);
+                                    let button = ui.add_enabled(!info.building, egui::Button::new(text).fill(ACCENT));
+                                    if button
+                                        .on_hover_text("Downloads and installs it, then restarts LeapLoader")
+                                        .on_disabled_hover_text("After the card is built")
+                                        .clicked()
+                                    {
+                                        st.updates.installer.start(asset.clone(), ctx);
+                                    }
+                                } else {
+                                    let download = egui::RichText::new("Download").color(egui::Color32::WHITE);
+                                    if ui.add(egui::Button::new(download).fill(ACCENT)).clicked() {
+                                        ctx.open_url(egui::OpenUrl::new_tab(&r.url));
+                                    }
+                                }
+                                if ui
+                                    .button("Skip this version")
+                                    .on_hover_text("Don't announce it at start-up again")
+                                    .clicked()
+                                {
+                                    settings.skipped_update = r.tag.clone();
+                                    actions.push(Action::SettingsChanged);
+                                    close = true;
+                                }
+                                if ui.button("Later").clicked() {
+                                    close = true;
+                                }
+                            });
+                            match &package {
+                                Ok(_) => {
+                                    let note = "LeapLoader restarts by itself when the update is in. Your settings \
+                                                and game list are kept.";
+                                    ui.label(egui::RichText::new(note).weak());
+                                    if install != Install::Idle && ui.link("Download it from GitHub instead").clicked()
+                                    {
+                                        ctx.open_url(egui::OpenUrl::new_tab(&r.url));
+                                    }
+                                }
+                                Err(why) => {
+                                    ui.label(
+                                        egui::RichText::new(format!("LeapLoader can't update itself here: {why}."))
+                                            .weak(),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                (Status::Done(_), None) => {
+                    let text = format!("✔ You're on the latest version ({CURRENT}).");
+                    ui.label(egui::RichText::new(text).color(ACCENT).strong());
+                }
+                (Status::NotChecked, _) => {
+                    if ui.button("Check for updates").clicked() {
+                        st.updates.check(ctx);
+                    }
+                }
+            }
+            if ui.checkbox(&mut settings.check_for_updates, "Check for updates when LeapLoader starts").changed() {
+                actions.push(Action::SettingsChanged);
+            }
+            let Status::Done(releases) = status else { return };
+            ui.separator();
+            ui.label(egui::RichText::new("Patch notes").strong().size(16.0));
+            let current = parse_version(CURRENT);
+            let focus = st.notes_open.take();
+            egui::ScrollArea::vertical().max_height(380.0).auto_shrink([false, true]).show(ui, |ui| {
+                for r in &releases {
+                    let this = r.version.is_some() && r.version == current;
+                    let is_new = r.version.zip(current).is_some_and(|(v, c)| v > c);
+                    let mut title = format!("{}  ·  {}", r.name, long_date(&r.date));
+                    if this {
+                        title.push_str("  (this version)");
+                    } else if is_new {
+                        title.push_str("  (new)");
+                    } else if r.prerelease {
+                        title.push_str("  (pre-release)");
+                    }
+                    let mut header = egui::CollapsingHeader::new(egui::RichText::new(title).strong())
+                        .id_salt(("release", &r.tag))
+                        .default_open(is_new || (this && newer.is_none()));
+                    if let Some(f) = &focus {
+                        header = header.open(Some(*f == r.tag));
+                    }
+                    let resp = header.show(ui, |ui| {
+                        notes_ui(ui, &r.notes);
+                        if ui.link("Open on GitHub").clicked() {
+                            ctx.open_url(egui::OpenUrl::new_tab(&r.url));
+                        }
+                    });
+                    if focus.as_ref() == Some(&r.tag) {
+                        resp.header_response.scroll_to_me(Some(egui::Align::TOP));
+                    }
+                }
+            });
+        });
+    st.show_updates = open && !close;
+    // Installed (even with the window closed since): restart into it, once.
+    if st.updates.installer.state() == Install::Ready && !st.restarting {
+        st.restarting = true;
+        actions.push(Action::RestartForUpdate);
+    }
 }
 
 fn status_bar(ui: &mut egui::Ui, st: &UiState, info: &Info) {
@@ -811,7 +1021,9 @@ fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: 
         });
     });
     ui.add_space(8.0);
-    let ready = !chosen.is_empty() && settings.output.is_some() && info.research.is_some();
+    // LeapLoader's menu needs the BIOS for its music (LeapFrog's has none).
+    let needs_bios = settings.menu == Menu::LeapLoader && info.bios.is_none();
+    let ready = !chosen.is_empty() && settings.output.is_some() && info.research.is_some() && !needs_bios;
     if info.building {
         build_progress(ui, info);
         ui.add_space(8.0);
@@ -838,11 +1050,18 @@ fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: 
             Some("Choose the output folder first.")
         } else if info.research.is_none() {
             Some("LeapLoader's research folder was not found (File → Settings).")
+        } else if needs_bios {
+            Some(
+                "Choose your Leapster 2 BIOS 0.6 dump first: LeapLoader's menu plays its music with the BIOS's                   instruments (none are included).",
+            )
         } else {
             None
         };
         if let Some(why) = why {
-            ui.label(egui::RichText::new(why).size(13.0).color(egui::Color32::from_gray(150)));
+            ui.add(egui::Label::new(egui::RichText::new(why).size(13.0).color(egui::Color32::from_gray(150))).wrap());
+        }
+        if needs_bios && ui.button("Choose your Leapster 2 BIOS…").clicked() {
+            actions.push(Action::Pick(Pick::Bios));
         }
     }
     ui.add_space(4.0);
@@ -1061,6 +1280,7 @@ fn usb_question(step: &UsbStep, info: &Info) -> (String, String, &'static str) {
 }
 
 fn dialogs(ctx: &egui::Context, st: &mut UiState, settings: &mut Settings, info: &Info, actions: &mut Vec<Action>) {
+    updates_window(ctx, st, settings, info, actions);
     // First start: the AI note and the hardware warning as a pop-up, read
     // once (Ribbit's first-start note).
     if !settings.ai_notice_seen {
@@ -1156,7 +1376,8 @@ fn dialogs(ctx: &egui::Context, st: &mut UiState, settings: &mut Settings, info:
             });
             ui.end_row();
             ui.label("Python");
-            if ui.add(egui::TextEdit::singleline(&mut settings.python).desired_width(260.0)).lost_focus() {
+            let edit = egui::TextEdit::singleline(&mut settings.python).hint_text("the one that comes with LeapLoader");
+            if ui.add(edit.desired_width(260.0)).lost_focus() {
                 actions.push(Action::SettingsChanged);
             }
             ui.end_row();
@@ -1175,8 +1396,10 @@ fn dialogs(ctx: &egui::Context, st: &mut UiState, settings: &mut Settings, info:
             ui.end_row();
             ui.label("Leapster 2 BIOS");
             ui.horizontal(|ui| {
-                let found =
-                    info.bios.as_ref().map_or_else(|| "(none: no menu music)".into(), |p| p.display().to_string());
+                let found = info
+                    .bios
+                    .as_ref()
+                    .map_or_else(|| "Choose… (needed for the menu)".into(), |p| p.display().to_string());
                 if ui
                     .button(found)
                     .on_hover_text(

@@ -1,0 +1,60 @@
+# Builds LeapLoader's macOS packages on GitHub's Macs (Windows and Linux are built
+# locally, on the owner's PC) and, if asked, attaches them to the release.
+# Manual only: Actions > macOS packages > Run workflow.
+name: macOS packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build, e.g. v0.2.0"
+        required: true
+      upload:
+        description: "Attach the packages to that release (off: keep them as run artifacts to check first)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Times in UTC.
+  TZ: UTC
+  # The Ribbit commit nativescan is built against (its ARC decoder; Ribbit is
+  # checked out beside LeapLoader, as on the owner's PC).
+  RIBBIT_REF: e8a4e66b9e1da03d664a0a2388d1c95bb485efcc
+
+jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Apple silicon and Intel: each package carries a Python for its processor.
+        runner: [macos-latest, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          path: LeapLoader
+      - uses: actions/checkout@v4
+        with:
+          repository: MotifMixes/ribbit
+          ref: ${{ env.RIBBIT_REF }}
+          path: Ribbit
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build and package (LeapLoader.app with its Python, binutils and scripts)
+        working-directory: LeapLoader
+        run: python3 -I scripts/package-release.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.runner }}
+          path: LeapLoader/target/dist/*.zip
+          if-no-files-found: error
+      - name: Attach to the release
+        if: ${{ inputs.upload }}
+        working-directory: LeapLoader
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" target/dist/*.zip --clobber

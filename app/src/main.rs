@@ -20,10 +20,13 @@ mod gamenames;
 mod games;
 mod gpu;
 mod icon;
+mod install;
+mod log;
 mod notify;
 mod settings;
 mod tags;
 mod ui;
+mod updates;
 mod usb;
 
 fn main() {
@@ -45,7 +48,29 @@ fn main() {
         }
         return;
     }
-    let data_dir = std::env::var_os("LEAPLOADER_DATA").map_or_else(settings::default_data_dir, Into::into);
+    let data_dir: std::path::PathBuf =
+        std::env::var_os("LEAPLOADER_DATA").map_or_else(settings::default_data_dir, Into::into);
+    // Nobody sees the window-less program's stderr: a log in the data
+    // folder for players to send (as Ribbit's ribbit.log).
+    log::init(&data_dir.join("leaploader.log"));
+    std::panic::set_hook(Box::new(|info| {
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        log::line(&format!(
+            "panic: {info}
+{backtrace}"
+        ));
+        // A panic on the window's thread ends LeapLoader: say so instead of
+        // closing without a word.
+        if std::thread::current().name() == Some("main") {
+            failed(&format!(
+                "LeapLoader stopped because of a bug:
+
+{info}"
+            ));
+        }
+    }));
+    #[cfg(windows)]
+    log::log_native_crashes();
     if let Err(e) = app::run(data_dir) {
         failed(&format!("LeapLoader could not start:\n\n{e:#}"));
     }
@@ -83,7 +108,17 @@ fn attach_console() {
 /// Says why LeapLoader stopped: stderr, and on Windows and macOS a message
 /// box (the window may never have drawn anything).
 fn failed(msg: &str) {
-    eprintln!("{msg}");
+    log::line(msg);
+    let msg = match log::path() {
+        Some(p) => format!(
+            "{msg}
+
+Please send {} with your report.",
+            p.display()
+        ),
+        None => msg.to_string(),
+    };
+    let msg = msg.as_str();
     rfd::MessageDialog::new().set_title("LeapLoader").set_description(msg).set_level(rfd::MessageLevel::Error).show();
     std::process::exit(1);
 }

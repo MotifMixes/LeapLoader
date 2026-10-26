@@ -11,7 +11,7 @@ Usage: python mkcard.py [--menu leaploader|MENU.lfp|SDMenu.bin] [--music SONG.mi
  sequencer plays instead of the clip, by BIOS program number, "drums" = the drum tracks; default drums;
  --short: tracks whose notes play their sample once, without looping it; --floor: a track's softer notes
  play at that velocity)
-(--bios: the Leapster 2 BIOS 0.6 dump whose instruments render the music; without it the menu has no music)
+(--bios: the Leapster 2 BIOS 0.6 dump whose instruments render the music; --music needs it)
 (folders: every .bin in them)
 
 OUT_DIR receives, ready to copy to the root of the card:
@@ -200,8 +200,8 @@ def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loo
                 bios = bios or musicrender.DEFAULT_BIOS
                 problem = music_bios_problem(bios)
             if problem:
-                print(f"note  menu without music: {problem}")
-                music = None
+                # The music is part of LeapLoader's menu (user's choice): no silent menu.
+                raise SystemExit(f"the menu music can't be made: {problem}")
         if music:
             info = {}
             seq = musicrender.render(music, bios_path=bios, report=info, loop_start=music_loop,

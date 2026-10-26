@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 
 TOOLS = os.environ.get("ARC_GNU", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Ribbit", "tools", "arc-gnu"))
+EXE = ".exe" if os.name == "nt" else ""  # the binutils' file names on this system
 FOPEN, FREAD, FCLOSE = 0x400F0830, 0x400F0890, 0x400F06A0
 TONUMBER, LFH = 0x40095FA4, 0x400A0EA8
 NAME = "llZ"
@@ -159,7 +160,7 @@ def build(address, groups, slots, slot_size):
            .replace("mov     r2, SLOT\n", f"mov     r2, {slot_size:#x}\n")
            .replace("TONUMBER", f"{TONUMBER:#x}").replace("LFH", f"{LFH:#x}")
            .replace("FOPEN", f"{FOPEN:#x}").replace("FREAD", f"{FREAD:#x}").replace("FCLOSE", f"{FCLOSE:#x}"))
-    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}.exe")
+    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("s.s", "s.o", "s.elf", "s.bin"))
         open(s, "w").write(src)
@@ -315,7 +316,7 @@ def build_peg(address, groups, slot_base, slot_size, orig_wgdb, orig_peg):
            .replace("NGROUPS", str(len(groups))).replace("ORIG_WGDB", f"{orig_wgdb:#x}").replace("ORIG_PEG", f"{orig_peg:#x}")
            .replace("SLOTBASE", f"{slot_base:#x}").replace("SLOTSIZE", f"{slot_size:#x}").replace("DTOI", f"{DTOI:#x}")
            .replace("FOPEN", f"{FOPEN:#x}").replace("FREAD", f"{FREAD:#x}").replace("FCLOSE", f"{FCLOSE:#x}"))
-    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}.exe")
+    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("s.s", "s.o", "s.elf", "s.bin"))
         open(s, "w").write(src)
@@ -451,7 +452,7 @@ def build_lfc(address, path, first, recs, ring, ring_size):
            .replace("TONUMBER", f"{TONUMBER:#x}").replace("DTOI", f"{DTOI:#x}").replace("PLAYLFC", f"{PLAYLFC:#x}")
            .replace("FOPEN", f"{FOPEN:#x}").replace("FSEEK", f"{FSEEK:#x}").replace("FREAD", f"{FREAD:#x}")
            .replace("FCLOSE", f"{FCLOSE:#x}"))
-    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}.exe")
+    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("s.s", "s.o", "s.elf", "s.bin"))
         open(s, "w").write(src)
@@ -707,7 +708,7 @@ def build_pool(address, path, recs, pool, pool_end, stub):
            .replace("TONUMBER", f"{TONUMBER:#x}").replace("DTOI", f"{DTOI:#x}").replace("LFH", f"{LFH:#x}")
            .replace("FOPEN", f"{FOPEN:#x}").replace("FSEEK", f"{FSEEK:#x}").replace("FREAD", f"{FREAD:#x}")
            .replace("FCLOSE", f"{FCLOSE:#x}"))
-    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}.exe")
+    exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("s.s", "s.o", "s.elf", "s.bin"))
         open(s, "w").write(src)

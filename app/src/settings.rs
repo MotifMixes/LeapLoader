@@ -35,7 +35,8 @@ pub struct Settings {
     /// LeapLoader's `research` folder (mkcard.py); None: found next to the
     /// program (`card::research_dir`).
     pub research: Option<PathBuf>,
-    /// The Python that runs mkcard.py.
+    /// The Python that runs mkcard.py: empty (or "python"/"python3") = the
+    /// one the release brings, else the system's (`card::python`).
     pub python: String,
     /// nativescan, the converter's helper (the NATIVESCAN variable); None:
     /// `card::default_nativescan`.
@@ -47,6 +48,11 @@ pub struct Settings {
     pub show_log: bool,
     /// The first-start note (made with AI, use at your own risk) was read.
     pub ai_notice_seen: bool,
+    /// Look for a newer release at start-up (updates.rs).
+    pub check_for_updates: bool,
+    /// A release the user chose to skip: not announced at start-up again
+    /// (Help → Check for updates still shows it).
+    pub skipped_update: String,
 }
 
 impl Default for Settings {
@@ -59,11 +65,13 @@ impl Default for Settings {
             output: None,
             menu: Menu::default(),
             research: None,
-            python: if cfg!(windows) { "python" } else { "python3" }.into(),
+            python: String::new(),
             nativescan: None,
             bios: None,
             show_log: true,
             ai_notice_seen: false,
+            check_for_updates: true,
+            skipped_update: String::new(),
         }
     }
 }

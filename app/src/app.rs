@@ -36,6 +36,8 @@ pub struct Wake;
 
 pub struct App {
     data_dir: PathBuf,
+    /// An installed update asked for a restart (install.rs).
+    restart_for_update: bool,
     settings: Settings,
     dumps: Vec<Dump>,
     ui: UiState,
@@ -106,6 +108,8 @@ impl App {
         let settings = Settings::load(&data_dir.join("settings.toml"));
         // The USB log's clock starts with the app.
         crate::usb::note("app started");
+        // What the last update moved aside.
+        crate::install::remove_leftovers();
         let egui_ctx = egui_context();
         {
             // Another thread asking egui to draw (the build's output) wakes
@@ -118,6 +122,7 @@ impl App {
         }
         let mut app = Self {
             data_dir,
+            restart_for_update: false,
             dumps: Vec::new(),
             ui: UiState::default(),
             build: None,
@@ -385,6 +390,7 @@ impl App {
             }
             Action::OpenFolder(path) => open_folder(&path),
             Action::SettingsChanged => self.save_settings(),
+            Action::RestartForUpdate => self.restart_for_update = true,
         }
     }
 
@@ -591,6 +597,20 @@ impl App {
         for a in actions {
             self.act(a);
         }
+        if std::mem::take(&mut self.restart_for_update) {
+            // Everything saved before the new version starts and reads it.
+            self.save_settings();
+            match crate::install::restart() {
+                Ok(()) => {
+                    event_loop.exit();
+                    return;
+                }
+                Err(e) => self.ui.problem(
+                    "The update is installed",
+                    format!("LeapLoader couldn't restart by itself: close it and open it again to use the new version. ({e})"),
+                ),
+            }
+        }
         self.find_tools();
         if self.build.is_some() || self.sheet.is_some() || self.usb_job.is_some() {
             // Keep the spinner turning while mkcard works, and look for the
@@ -626,7 +646,11 @@ impl ApplicationHandler<Wake> for App {
             use winit::platform::windows::WindowAttributesExtWindows as _;
             attrs.with_taskbar_icon(crate::icon::taskbar_icon())
         };
-        match event_loop.create_window(attrs).context("creating window").and_then(|w| Gpu::new(Arc::new(w))) {
+        match event_loop
+            .create_window(attrs)
+            .context("creating window")
+            .and_then(|w| Gpu::new(Arc::new(w), Some(&self.data_dir.join("gpu-setup-crashed.txt"))))
+        {
             Ok(gpu) => {
                 self.egui_state = Some(egui_winit::State::new(
                     self.egui_ctx.clone(),

@@ -64,6 +64,23 @@ pub fn bundled_arc_gnu() -> Option<PathBuf> {
     dir.join(assembler).is_file().then_some(dir)
 }
 
+/// The Python that runs mkcard: the one a release package brings (python/
+/// beside the program, with numpy and scipy: players install nothing),
+/// unless Settings names another; else the system's `python`/`python3`.
+pub fn python(settings: &Settings) -> PathBuf {
+    let chosen = settings.python.trim();
+    let default = chosen.is_empty() || chosen == "python" || chosen == "python3";
+    let bundled = std::env::current_exe().ok().and_then(|e| {
+        let dir = e.parent()?.join("python");
+        Some(if cfg!(windows) { dir.join("python.exe") } else { dir.join("bin").join("python3") })
+    });
+    match bundled.filter(|p| default && p.is_file()) {
+        Some(p) => p,
+        None if chosen.is_empty() => PathBuf::from(if cfg!(windows) { "python" } else { "python3" }),
+        None => PathBuf::from(chosen),
+    }
+}
+
 /// The Leapster 2 BIOS the menu music is rendered with: the setting, else
 /// the one picked in Ribbit (None: mkcard's default, else no music).
 pub fn find_bios(settings: &Settings) -> Option<PathBuf> {
@@ -178,7 +195,8 @@ impl Build {
         std::fs::write(&music, MENU_MUSIC)?;
         let welcome = staging.join("welcome.alaw");
         std::fs::write(&welcome, WELCOME)?;
-        let mut cmd = Command::new(&settings.python);
+        let python = python(settings);
+        let mut cmd = Command::new(&python);
         // -I: none of the user's Python settings or packages folder; -u: lines
         // as they come; -X utf8: text in UTF-8 whatever the console's code page.
         cmd.args(["-I", "-u", "-X", "utf8"]).arg(research.join("mkcard.py"));
@@ -203,7 +221,7 @@ impl Build {
             Ok(c) => c,
             Err(e) => {
                 let _ = std::fs::remove_dir_all(&staging);
-                anyhow::bail!("could not start {}: {e}", settings.python);
+                anyhow::bail!("could not start {}: {e}", python.display());
             }
         };
         let (tx, events) = channel();

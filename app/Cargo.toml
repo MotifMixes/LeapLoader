@@ -1,7 +1,7 @@
 [package]
 name = "leaploader"
 description = "LeapLoader's desktop app: puts your own Leapster 2 cartridge dumps on an SD card"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.88"
 publish = false
@@ -31,6 +31,9 @@ epaint_default_fonts = "0.36.2"
 crc32fast = "1.5"
 # Zipped dumps (.zip with a .bin inside).
 zip = { version = "8", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# The update check and the in-app update (updates.rs, install.rs: HTTPS to GitHub).
+ureq = "3"
+serde_json = "1"
 
 # The "card built" notification (notify.rs: a tray notification) and the
 # Leapster 2 over USB (usb.rs: disks and their identity).
@@ -52,6 +55,9 @@ windows-sys = { version = "0.61", features = [
 # SCSI commands to the Leapster 2 on Linux (usb.rs: SG_IO).
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = "0.2"
+# Unpacking the Linux release (.tar.gz) for the in-app update.
+flate2 = "1"
+tar = "0.4"
 
 [build-dependencies]
 embed-resource = "3"

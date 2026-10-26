@@ -499,6 +499,7 @@ mod platform {
         PropertyStandardQuery, STORAGE_DEVICE_DESCRIPTOR, STORAGE_DEVICE_NUMBER, STORAGE_PROPERTY_QUERY,
         StorageDeviceProperty,
     };
+    use windows_sys::Win32::System::Diagnostics::Debug::{SEM_FAILCRITICALERRORS, SetThreadErrorMode};
 
     fn wide(s: &str) -> Vec<u16> {
         s.encode_utf16().chain([0]).collect()
@@ -616,7 +617,16 @@ mod platform {
             let device = format!("\\\\.\\PhysicalDrive{n}");
             let Ok(h) = open_with(&device, 0) else { continue };
             let Some((vendor, product, revision)) = identity(&h) else { continue };
-            let mounted = letters.iter().find(|(m, _)| *m == n).map(|(_, p)| p.clone());
+            // Windows gives the console's disks a letter as soon as they are
+            // plugged in, but the SD card reads nothing before "mount" (C2):
+            // a letter only counts once its drive can be read.
+            let mounted = letters.iter().find(|(m, _)| *m == n).map(|(_, p)| p.clone()).filter(|p| {
+                let ready = free_space(p).is_some();
+                if !ready {
+                    note(format!("  {}: has a letter but can't be read yet", p.display()));
+                }
+                ready
+            });
             out.push(Disk { device, vendor, product, revision, mounted });
         }
         out
@@ -740,8 +750,15 @@ mod platform {
     pub fn free_space(path: &Path) -> Option<u64> {
         let name = wide(&path.to_string_lossy());
         let mut free = 0u64;
-        // SAFETY: valid pointers for the call.
-        let ok = unsafe { GetDiskFreeSpaceExW(name.as_ptr(), &mut free, std::ptr::null_mut(), std::ptr::null_mut()) };
+        let mut before = 0;
+        // SAFETY: valid pointers for the calls. No "insert a disk" dialog for a
+        // drive that isn't ready: the call just fails.
+        let ok = unsafe {
+            SetThreadErrorMode(SEM_FAILCRITICALERRORS, &mut before);
+            let ok = GetDiskFreeSpaceExW(name.as_ptr(), &mut free, std::ptr::null_mut(), std::ptr::null_mut());
+            SetThreadErrorMode(before, std::ptr::null_mut());
+            ok
+        };
         (ok != 0).then_some(free)
     }
 }

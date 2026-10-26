@@ -1,6 +1,6 @@
 # LeapLoader handoff notes (updated 2026-10-25, late session)
 
-## START HERE (2026-10-26, latest: B5 fixed, 0.2.1 not yet committed)
+## START HERE (2026-10-26, latest: 0.2.2 hotfix: USB drive letter; 0.2.1 B5 fix)
 * **B5 (Leapster Connected) fixed** (how-it-works 8): 0.2.0's stubs called BIOS 0.6 addresses;
   `research/bioscall.py` makes them portable (service table + per-BIOS Flash natives). VERIFIED-EMU
   on B5 from power-on, 9 representative games (`native\g16`, `run_b5.py`: RAM chip, files on the
@@ -10,6 +10,13 @@
 * Menu music from any Leapster 2 BIOS (0.6, B5, m9). Version bumped to 0.2.1 (app + menu label,
   which still said v0.1.0 in 0.2.0). Docs and README caution updated for 0.2.1.
 * Ribbit (uncommitted, logged in its changes-from-leaploader.md): optional SDHC card `RIBBIT_SDHC=1`.
+* **0.2.2 USB fix (tester report 2026-10-26):** on a real console Windows gives the SD
+  disk a letter (F:) before C2, so the app showed "Build card onto" at once and mkcard said "the output
+  folder F:\ is not there". `usb.rs` disks(): a letter counts only once GetDiskFreeSpaceExW reads it
+  (critical-error dialog off); otherwise the log says "has a letter but can't be read yet" and the
+  app offers "Open the SD card". Tested: readable disks unchanged, empty CD drive -> error 21, no
+  dialog. Not tested on a console. SNES emulator idea parked (user); ARC GCC 2026.03 unpacked in
+  D:\leaploader-tmprc-gcc, untested.
 * Still to do: game names on real consoles (MAME names, part numbers), menu battery icon and power
   button.
 

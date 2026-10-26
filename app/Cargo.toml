@@ -1,7 +1,7 @@
 [package]
 name = "leaploader"
 description = "LeapLoader's desktop app: puts your own Leapster 2 cartridge dumps on an SD card"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 rust-version = "1.88"
 publish = false
@@ -43,6 +43,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_Storage_IscsiDisc",
+    "Win32_System_Diagnostics_Debug",
     "Win32_System_IO",
     "Win32_System_Ioctl",
     "Win32_System_LibraryLoader",

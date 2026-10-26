@@ -43,9 +43,24 @@ CACHE = TARGET / "package-cache"
 # The binutils the scripts call (eestub, nativechip, streamstub: as, ld, nm, objcopy).
 ARC_TOOLS = ["as", "ld", "nm", "objcopy"]
 # mkcard.py and everything it imports (sndgen for the welcome sound, musicrender for the music).
-SCRIPTS = ["mkcard", "avm1patch", "bigimage", "biosbank2sf2", "eestub", "gamenames", "icongen", "ingame",
-           "menugen", "musicrender", "nativechip", "pixelfont", "saveshim", "sdpack", "seqgen", "sndgen",
+SCRIPTS = ["mkcard", "avm1patch", "bigimage", "biosbank2sf2", "bioscall", "eestub", "gamenames", "icongen",
+           "ingame", "menugen", "musicrender", "nativechip", "pixelfont", "saveshim", "sdpack", "seqgen", "sndgen",
            "streamstub", "swfgen"]
+
+
+def imported_scripts():
+    """The research scripts mkcard.py imports, directly or not (0.2.1 first missed bioscall)."""
+    todo, seen = ["mkcard"], set()
+    while todo:
+        name = todo.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        for line in (ROOT / "research" / f"{name}.py").read_text(encoding="utf-8").splitlines():
+            m = re.match(r"\s*(?:import|from)\s+([A-Za-z_]\w*)", line)
+            if m and (ROOT / "research" / f"{m.group(1)}.py").exists():
+                todo.append(m.group(1))
+    return seen
 # The bundled Python: python-build-standalone's install_only build, and the music's packages.
 PYTHON_RELEASE = "20261003"
 PYTHON_VERSION = "3.12.15"
@@ -327,6 +342,9 @@ def main():
     shutil.copy2(TARGET / "release" / f"leaploader{EXE}", payload / program)
     shutil.copy2(TARGET / "release" / f"nativescan{EXE}", payload / f"nativescan{EXE}")
     (resources / "research").mkdir()
+    missing = imported_scripts() - set(SCRIPTS)
+    if missing:
+        sys.exit(f"SCRIPTS lacks research scripts mkcard imports: {', '.join(sorted(missing))}")
     for s in SCRIPTS:
         shutil.copy2(ROOT / "research" / f"{s}.py", resources / "research" / f"{s}.py")
     arc_binutils(payload)

@@ -28,6 +28,8 @@ pub fn research_dir(settings: &Settings) -> Option<PathBuf> {
     }
     let has_mkcard = |d: &Path| d.join("mkcard.py").is_file();
     let exe = std::env::current_exe().ok();
+    // (In LeapLoader.app: Contents/Resources/research.)
+    let from_bundle = package_resources().map(|d| d.join("research"));
     let from_exe = exe.iter().flat_map(|e| e.ancestors().skip(1)).map(|d| d.join("research"));
     let from_cwd = std::env::current_dir().ok().into_iter().flat_map(|d| {
         let v: Vec<PathBuf> = d.ancestors().map(|a| a.join("research")).collect();
@@ -41,7 +43,7 @@ pub fn research_dir(settings: &Settings) -> Option<PathBuf> {
     let from_source = Path::new(env!("CARGO_MANIFEST_DIR")).parent().map(|p| p.join("research"));
     #[cfg(leaploader_release)]
     let from_source: Option<PathBuf> = None;
-    from_exe.chain(from_cwd).chain(from_source).find(|d| has_mkcard(d))
+    from_bundle.into_iter().chain(from_exe).chain(from_cwd).chain(from_source).find(|d| has_mkcard(d))
 }
 
 /// nativescan for the NATIVESCAN variable: the setting, else the one
@@ -64,6 +66,15 @@ pub fn bundled_arc_gnu() -> Option<PathBuf> {
     dir.join(assembler).is_file().then_some(dir)
 }
 
+/// Where a release package keeps its scripts and Python: beside the program,
+/// or in LeapLoader.app's Contents/Resources on macOS (whatever sits in
+/// Contents/MacOS must be signed code). None: not in an app bundle.
+pub fn package_resources() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let resources = exe.parent()?.parent()?.join("Resources");
+    (cfg!(target_os = "macos") && resources.is_dir()).then_some(resources)
+}
+
 /// The Python that runs mkcard: the one a release package brings (python/
 /// beside the program, with numpy and scipy: players install nothing),
 /// unless Settings names another; else the system's `python`/`python3`.
@@ -71,7 +82,7 @@ pub fn python(settings: &Settings) -> PathBuf {
     let chosen = settings.python.trim();
     let default = chosen.is_empty() || chosen == "python" || chosen == "python3";
     let bundled = std::env::current_exe().ok().and_then(|e| {
-        let dir = e.parent()?.join("python");
+        let dir = package_resources().unwrap_or(e.parent()?.to_path_buf()).join("python");
         Some(if cfg!(windows) { dir.join("python.exe") } else { dir.join("bin").join("python3") })
     });
     match bundled.filter(|p| default && p.is_file()) {

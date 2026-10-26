@@ -311,22 +311,26 @@ def main():
         shutil.rmtree(stage)
     if SYSTEM == "macos":
         app = stage / "LeapLoader.app" / "Contents"
+        # Contents/MacOS holds only programs (everything there must be signed code); the scripts and
+        # the Python go in Contents/Resources (card::package_resources).
         payload = app / "MacOS"
+        resources = app / "Resources"
         payload.mkdir(parents=True)
+        resources.mkdir()
         (app / "Info.plist").write_text(INFO_PLIST.format(version=ver, bundle_id=BUNDLE_ID), encoding="utf-8")
         docs = stage
     else:
-        payload = stage / "LeapLoader"
+        payload = resources = stage / "LeapLoader"
         payload.mkdir(parents=True)
         docs = payload
     program = "LeapLoader.exe" if SYSTEM == "windows" else "leaploader"
     shutil.copy2(TARGET / "release" / f"leaploader{EXE}", payload / program)
     shutil.copy2(TARGET / "release" / f"nativescan{EXE}", payload / f"nativescan{EXE}")
-    (payload / "research").mkdir()
+    (resources / "research").mkdir()
     for s in SCRIPTS:
-        shutil.copy2(ROOT / "research" / f"{s}.py", payload / "research" / f"{s}.py")
+        shutil.copy2(ROOT / "research" / f"{s}.py", resources / "research" / f"{s}.py")
     arc_binutils(payload)
-    bundled_python(payload)
+    bundled_python(resources)
     texts = {"README.txt": README.format(version=ver, start=START[SYSTEM], data=DATA_FOLDER[SYSTEM]),
              "LICENSE.txt": (ROOT / "LICENSE").read_text(encoding="utf-8"),
              "THIRD-PARTY-NOTICES.txt": (ROOT / "app" / "THIRD-PARTY-NOTICES.txt").read_text(encoding="utf-8")
@@ -342,7 +346,7 @@ def main():
     expected = {program, f"nativescan{EXE}", "research", "arc-gnu", "python"}
     if docs == payload:
         expected |= set(texts)
-    found = {p.name for p in payload.iterdir()}
+    found = {p.name for p in payload.iterdir()} | {p.name for p in resources.iterdir()}
     if found != expected:
         sys.exit(f"unexpected files in the package: {sorted(found ^ expected)}")
     leaks = personal_info(stage)
@@ -355,7 +359,7 @@ def main():
         # Signed ad hoc (no Developer ID): every program and library inside (Python's, numpy's, scipy's,
         # binutils, nativescan: --deep only reaches nested bundles), then the app.
         macho = (b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe", b"\xca\xfe\xba\xbe")
-        code = [f for f in payload.rglob("*") if f.is_file() and not f.is_symlink()
+        code = [f for f in [*payload.rglob("*"), *resources.rglob("*")] if f.is_file() and not f.is_symlink()
                 and f.open("rb").read(4) in macho and f.name != "leaploader"]
         for i in range(0, len(code), 200):
             run("codesign", "--force", "--sign", "-", *code[i:i + 200])

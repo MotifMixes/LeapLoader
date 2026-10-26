@@ -9,6 +9,11 @@ on real hardware. LeapLoader is licensed under the GPL-3.0-or-later (see [LICENS
 
 **→ [User guide](docs/manual/01-welcome.md)**: every button and screen, step by step
 
+> [!CAUTION]
+> **LeapLoader 0.2.0 and earlier: do not use them on a Leapster Connected console (BIOS B5, 152-12076).** On a B5
+> console a game from a LeapLoader card can get stuck on its loading screen and **scramble the SD card's files and
+> folders**. Use them only on Leapster 2 consoles with BIOS 0.6 (152-12206). A fixed version is coming.
+
 > [!IMPORTANT]
 > ## This project was made with AI
 >

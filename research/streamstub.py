@@ -12,7 +12,11 @@ Group record: {handle as a double (lo, hi), path, count, count x (word address, 
 import os
 import struct
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bioscall  # noqa: E402
 
 TOOLS = os.environ.get("ARC_GNU", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Ribbit", "tools", "arc-gnu"))
 EXE = ".exe" if os.name == "nt" else ""  # the binutils' file names on this system
@@ -163,7 +167,7 @@ def build(address, groups, slots, slot_size):
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("s.s", "s.o", "s.elf", "s.bin"))
-        open(s, "w").write(src)
+        open(s, "w").write(bioscall.portable(src))
         for cmd in ([exe("as"), "-mcpu=arc600", "-o", o, s],
                     [exe("ld"), "-EL", "-Ttext", f"{address:#x}", "-e", "_start", "-o", e, o],
                     [exe("objcopy"), "-O", "binary", "-j", ".text", e, b]):
@@ -319,7 +323,7 @@ def build_peg(address, groups, slot_base, slot_size, orig_wgdb, orig_peg):
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("s.s", "s.o", "s.elf", "s.bin"))
-        open(s, "w").write(src)
+        open(s, "w").write(bioscall.portable(src))
         for cmd in ([exe("as"), "-mcpu=arc600", "-o", o, s],
                     [exe("ld"), "-EL", "-Ttext", f"{address:#x}", "-e", "_start", "-o", e, o],
                     [exe("objcopy"), "-O", "binary", "-j", ".text", e, b]):
@@ -455,7 +459,7 @@ def build_lfc(address, path, first, recs, ring, ring_size):
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("s.s", "s.o", "s.elf", "s.bin"))
-        open(s, "w").write(src)
+        open(s, "w").write(bioscall.portable(src))
         for cmd in ([exe("as"), "-mcpu=arc600", "-o", o, s],
                     [exe("ld"), "-EL", "-Ttext", f"{address:#x}", "-e", "_start", "-o", e, o],
                     [exe("objcopy"), "-O", "binary", "-j", ".text", e, b]):
@@ -711,7 +715,7 @@ def build_pool(address, path, recs, pool, pool_end, stub):
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("s.s", "s.o", "s.elf", "s.bin"))
-        open(s, "w").write(src)
+        open(s, "w").write(bioscall.portable(src))
         for cmd in ([exe("as"), "-mcpu=arc600", "-o", o, s],
                     [exe("ld"), "-EL", "-Ttext", f"{address:#x}", "-e", "_start", "-o", e, o],
                     [exe("objcopy"), "-O", "binary", "-j", ".text", e, b]):

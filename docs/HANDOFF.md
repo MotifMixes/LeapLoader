@@ -1,6 +1,19 @@
 # LeapLoader handoff notes (updated 2026-10-25, late session)
 
-## START HERE (2026-10-26, later: 0.2.0)
+## START HERE (2026-10-26, latest: B5 fixed, 0.2.1 not yet committed)
+* **B5 (Leapster Connected) fixed** (how-it-works 8): 0.2.0's stubs called BIOS 0.6 addresses;
+  `research/bioscall.py` makes them portable (service table + per-BIOS Flash natives). VERIFIED-EMU
+  on B5 from power-on, 9 representative games (`native\g16`, `run_b5.py`: RAM chip, files on the
+  card, native chip): game, HINT + A + B, relaunch, 5 restarts, same saves as 0.6. A 0.2.0-built
+  card reproduces the bug (restarts back to Sign In). The "repeated 512-byte block" hang was a test
+  artifact (B5 save state + swapped card): test B5 only from power-on.
+* Menu music from any Leapster 2 BIOS (0.6, B5, m9). Version bumped to 0.2.1 (app + menu label,
+  which still said v0.1.0 in 0.2.0). Docs and README caution updated for 0.2.1.
+* Ribbit (uncommitted, logged in its changes-from-leaploader.md): optional SDHC card `RIBBIT_SDHC=1`.
+* Still to do: game names on real consoles (MAME names, part numbers), menu battery icon and power
+  button.
+
+## Earlier (2026-10-26, earlier: 0.2.0)
 * **0.2.0** (user asked: "hotfix but add the other stuff too"): start-up crash fix (Ribbit's GPU
   fallback + guard file, leaploader.log, panic/native-crash logging), in-app updates (updates.rs,
   install.rs: the package folder is swapped item by item; macOS swaps LeapLoader.app), packages

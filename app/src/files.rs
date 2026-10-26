@@ -18,7 +18,7 @@ pub enum Pick {
     /// LeapLoader's research folder (with mkcard.py).
     Research,
     Nativescan,
-    /// The Leapster 2 BIOS 0.6 dump (the menu music's instruments).
+    /// A Leapster 2 BIOS dump (the menu music's instruments).
     Bios,
 }
 
@@ -31,7 +31,7 @@ impl Pick {
             Pick::LeapFrogMenu => "Choose LeapFrog's SD menu (.lfp package or SDMenu.bin)",
             Pick::Research => "Choose LeapLoader's research folder (with mkcard.py)",
             Pick::Nativescan => "Choose nativescan",
-            Pick::Bios => "Choose your Leapster 2 BIOS 0.6 dump (152-12206)",
+            Pick::Bios => "Choose your Leapster 2 BIOS dump (0.6, Connected B5 or CIP3 m9)",
         }
     }
 

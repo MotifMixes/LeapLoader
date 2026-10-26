@@ -13,7 +13,7 @@ Under **Menu**, choose the menu the Leapster 2's SD icon opens:
 | **LeapLoader (Recommended)** | LeapLoader's own menu: the games' box names, 4 to a page, search, music. See [On the Leapster 2](05-on-the-leapster-2.md#leaploaders-menu) |
 | **LeapFrog's SD menu** | LeapFrog's own menu: 6 game buttons a page, no music, no search |
 
-LeapLoader's menu needs your **Leapster 2 BIOS 0.6** dump (152-12206): it plays its music with the BIOS's instruments, and LeapLoader includes none. If you use the Ribbit emulator, LeapLoader finds the BIOS picked there. If it finds none, the panel says "Choose your Leapster 2 BIOS 0.6 dump first: LeapLoader's menu plays its music with the BIOS's instruments (none are included)." Click **Choose your Leapster 2 BIOS…** under it and pick the file; until then **Build card** can't be clicked. See [Settings](07-settings.md#leapster-2-bios).
+LeapLoader's menu needs your **Leapster 2 BIOS** dump (0.6 152-12206, the Connected's B5 152-12076 or CIP3 m9 152-12659): it plays its music with the BIOS's instruments, and LeapLoader includes none. If you use the Ribbit emulator, LeapLoader finds the BIOS picked there. If it finds none, the panel says "Choose your Leapster 2 BIOS dump first: LeapLoader's menu plays its music with the BIOS's instruments (none are included)." Click **Choose your Leapster 2 BIOS…** under it and pick the file; until then **Build card** can't be clicked. See [Settings](07-settings.md#leapster-2-bios).
 
 LeapFrog's SD menu has no music and needs no BIOS. It is not included with LeapLoader either. To use it, click **Import .lfp…** and choose your own LeapFrog package for it (for example `LSTR-0x00130001-000000.lfp`). If the output folder already holds LeapFrog's menu from an earlier card, LeapLoader can use that one.
 
@@ -54,7 +54,7 @@ To change the card later, change the list and build again into the same place. S
 
 - green lines, `ok …`: a game put on the card, and the folder it went to;
 - red lines, `skip …`: a game left off, and why;
-- an error, if the build stopped. For example "the menu music can't be made: … is not the Leapster 2 BIOS 0.6 (152-12206)" means the BIOS file chosen is another version, or a damaged dump (see [Settings](07-settings.md#leapster-2-bios)).
+- an error, if the build stopped. For example "the menu music can't be made: … is not a Leapster 2 BIOS (…)" means the file chosen is another BIOS (for example the first Leapster's), or a damaged dump (see [Settings](07-settings.md#leapster-2-bios)).
 
 **Copy** copies the whole log, for a bug report.
 

@@ -16,7 +16,11 @@ No HINT + A + B prompt for these games (that is ActionScript too).
 """
 import os
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bioscall  # noqa: E402
 
 TOOLS = os.environ.get("ARC_GNU", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Ribbit", "tools", "arc-gnu"))
 EXE = ".exe" if os.name == "nt" else ""  # the binutils' file names on this system
@@ -71,6 +75,14 @@ install:
     mov     r4, installed
     mov     r5, 1
     st      r5, [r4]
+    ; Only on BIOS 0.6 and B5 (as eestub.py): elsewhere the game's natives run unchanged, nothing installed.
+    mov     r0, 0x40005b18
+    ldh     r0, [r0]
+    cmp     r0, 0x3730
+    beq     98f
+    cmp     r0, 0x3032
+    bne     9f
+98:
     mov     r0, SIZE
     mov     r1, MALLOC
     jl      [r1]
@@ -432,7 +444,7 @@ def build(address, size, path, originals):
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b, m = (os.path.join(t, n) for n in ("chip.s", "chip.o", "chip.elf", "chip.bin", "chip.map"))
-        open(s, "w").write(src)
+        open(s, "w").write(bioscall.portable(src))
         for cmd in ([exe("as"), "-mcpu=arc600", "-o", o, s],
                     [exe("ld"), "-EL", "-Ttext", f"{address:#x}", "-e", "_start", "-o", e, o],
                     [exe("objcopy"), "-O", "binary", "-j", ".text", e, b]):

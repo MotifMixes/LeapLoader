@@ -1052,7 +1052,7 @@ fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: 
             Some("LeapLoader's research folder was not found (File → Settings).")
         } else if needs_bios {
             Some(
-                "Choose your Leapster 2 BIOS 0.6 dump first: LeapLoader's menu plays its music with the BIOS's instruments (none are included).",
+                "Choose your Leapster 2 BIOS dump first: LeapLoader's menu plays its music with the BIOS's instruments (none are included).",
             )
         } else {
             None
@@ -1403,7 +1403,7 @@ fn dialogs(ctx: &egui::Context, st: &mut UiState, settings: &mut Settings, info:
                 if ui
                     .button(found)
                     .on_hover_text(
-                        "Your Leapster 2 BIOS 0.6 dump: LeapLoader's menu music is played with its instruments",
+                        "Your Leapster 2 BIOS dump (0.6, Connected B5 or CIP3 m9): LeapLoader's menu music is played with its instruments",
                     )
                     .clicked()
                 {

@@ -12,7 +12,7 @@ LeapLoader comes with **no games and no BIOS**. You need:
 
 - a **Leapster 2** with an SD card in it (the first Leapster and the Leapster L-MAX have no SD card slot and can't use it),
 - dumps of your own **Leapster cartridges** (`.bin` files, plain or zipped),
-- a dump of your own **Leapster 2 BIOS 0.6** (152-12206), for LeapLoader's menu: it plays its music with the BIOS's instruments, and none are included. If you use the Ribbit emulator, LeapLoader finds the BIOS picked there by itself. See [Settings](07-settings.md#leapster-2-bios).
+- a dump of your own **Leapster 2 BIOS** (0.6 152-12206, the Connected's B5 152-12076 or CIP3 m9 152-12659), for LeapLoader's menu: it plays its music with the BIOS's instruments, and none are included. If you use the Ribbit emulator, LeapLoader finds the BIOS picked there by itself. See [Settings](07-settings.md#leapster-2-bios).
 
 Nothing else: there is nothing to install. The download brings everything LeapLoader uses, its own Python included.
 

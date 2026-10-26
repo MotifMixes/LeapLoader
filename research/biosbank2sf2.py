@@ -47,7 +47,24 @@ GM = ["Acoustic Grand", "Bright Piano", "Electric Grand", "Honky-tonk", "E.Piano
       "Bird Tweet", "Telephone", "Helicopter", "Applause", "Gunshot"]
 
 B = 0x4000_0000
-PROGRAM_TABLE = 0x4000_0628
+PROGRAM_TABLE = 0x4000_0628  # BIOS 0.6 (B5 0x4000_0620, m9 0x4000_0624): see program_table
+
+
+def program_table(d):
+    """The BIOS's resource 0x1006/2, found through its LEAP directory (at [0x4000_0140], as in a
+    cartridge), so every Leapster 2 BIOS works: 0.6, Connected B5, CIP3 m9 (2026-10-26)."""
+    u32 = lambda a: struct.unpack_from("<I", d, a - B)[0]
+    leap = u32(B + 0x140)
+    if not B <= leap < B + len(d) or d[leap - B:leap - B + 4] != b"LEAP":
+        return PROGRAM_TABLE
+    for i in range(struct.unpack_from("<H", d, leap - B + 6)[0]):
+        tag, count, lst = struct.unpack_from("<HHI", d, leap - B + 0x20 + 8 * i)
+        if tag == 0x1006:
+            for j in range(count):
+                rid, _, v = struct.unpack_from("<HHI", d, lst - B + 8 * j)
+                if rid == 2:
+                    return v
+    return PROGRAM_TABLE
 DUMMY_LEN = 0x42  # a near-silent 66-byte sample used to fill unused key ranges
 
 
@@ -67,12 +84,13 @@ def alaw(c):
 
 def read_bank(d):
     u32 = lambda a: struct.unpack_from("<I", d, a - B)[0]
-    ver, _, first, count = struct.unpack_from("<4I", d, PROGRAM_TABLE - B)
+    table = program_table(d)
+    ver, _, first, count = struct.unpack_from("<4I", d, table - B)
     if ver != 0x100 or count != 128:
-        raise SystemExit("program table not found where BIOS 0.6 keeps it; is this a Leapster 2 BIOS 0.6 dump?")
+        raise SystemExit("no instrument table in this BIOS; is it a Leapster 2 BIOS dump?")
     programs = []
     for p in range(count):
-        ptr = u32(PROGRAM_TABLE + 16 + 4 * p)
+        ptr = u32(table + 16 + 4 * p)
         zones = []
         if B <= ptr < B + len(d) - 20:
             a = ptr

@@ -10,9 +10,11 @@ on real hardware. LeapLoader is licensed under the GPL-3.0-or-later (see [LICENS
 **→ [User guide](docs/manual/01-welcome.md)**: every button and screen, step by step
 
 > [!CAUTION]
-> **LeapLoader 0.2.0 and earlier: do not use them on a Leapster Connected console (BIOS B5, 152-12076).** On a B5
-> console a game from a LeapLoader card can get stuck on its loading screen and **scramble the SD card's files and
-> folders**. Use them only on Leapster 2 consoles with BIOS 0.6 (152-12206). A fixed version is coming.
+> **On a Leapster Connected console (BIOS B5, 152-12076), use LeapLoader 0.2.1 or later.** With 0.2.0 and earlier,
+> a game from a LeapLoader card can get stuck on its loading screen on a B5 console and **scramble the SD card's
+> files and folders**: the games called the BIOS at BIOS 0.6's addresses. 0.2.1 finds the right addresses for each
+> BIOS; in the emulator, B5 now runs the games, their saves and HINT + A + B. If you built a card with 0.2.0, build it
+> again with 0.2.1 before you use it on a B5 console.
 
 > [!IMPORTANT]
 > ## This project was made with AI
@@ -32,7 +34,7 @@ on real hardware. LeapLoader is licensed under the GPL-3.0-or-later (see [LICENS
 
 > [!WARNING]
 > **Nothing has been tested on a real Leapster 2 yet.** Every result so far comes from the Ribbit emulator's
-> Leapster 2 (BIOS 0.6). Copy your SD card's files somewhere before you try a card, and please report what happens.
+> Leapster 2 (BIOS 0.6, and from 0.2.1 the Connected's B5). Copy your SD card's files somewhere before you try a card, and please report what happens.
 
 ## What you need
 
@@ -42,8 +44,8 @@ on real hardware. LeapLoader is licensed under the GPL-3.0-or-later (see [LICENS
   tested.
 * Dumps of **your own Leapster cartridges** (`.bin`, plain or zipped). Which games work:
   [compatibility list](docs/compatibility.md).
-* A dump of your own **Leapster 2 BIOS 0.6** (152-12206), for LeapLoader's menu: it plays its music with the BIOS's
-  instruments, and none are included. If you use Ribbit, LeapLoader finds the BIOS picked there by itself.
+* A dump of your own **Leapster 2 BIOS** (0.6 152-12206, the Connected's B5 152-12076 or CIP3 m9 152-12659), for
+  LeapLoader's menu: it plays its music with the BIOS's instruments, and none are included. If you use Ribbit, LeapLoader finds the BIOS picked there by itself.
 
 You don't need to install anything else: each download brings everything LeapLoader uses, its own Python included.
 
@@ -69,7 +71,7 @@ You don't need to install anything else: each download brings everything LeapLoa
    Games LeapLoader knows show **Compatible** and are switched on; the others show **Incompatible** and stay off.
    Click a row to switch a game on or off.
 5. On the right, keep **Menu: LeapLoader (Recommended)**. If LeapLoader didn't find your Leapster 2 BIOS, click
-   **Choose your Leapster 2 BIOS…** and pick your BIOS 0.6 dump. Under **Output folder** click **Choose…** and pick
+   **Choose your Leapster 2 BIOS…** and pick your BIOS dump. Under **Output folder** click **Choose…** and pick
    the SD card's drive (in the computer's card reader). Any folder works too: then copy its `Leapster` folder to the
    root of the card.
 6. Click **Build card (N games)** and wait until it says **Card built**. **View › Build log** shows what happened to

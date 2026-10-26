@@ -41,7 +41,11 @@ reads it. (Any other restart of the game still boots the console's home screen, 
 """
 import os
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bioscall  # noqa: E402
 
 TOOLS = os.environ.get("ARC_GNU", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Ribbit", "tools", "arc-gnu"))
 EXE = ".exe" if os.name == "nt" else ""  # the binutils' file names on this system
@@ -82,6 +86,18 @@ llee:
     push_s  r14
     push_s  r15
     mov_s   r13, r0
+    ; Only on the BIOSes bioscall.py knows: 0.6 (its part number's "20" at 0x4000_5B18) and the
+    ; Connected B5 ("07"). 0.2.0 called 0.6 addresses on B5 too, and there a game got stuck on its
+    ; loading screen and the SD card's files were scrambled (2026-10-26). On any other BIOS nothing
+    ; is installed or written; the call returns 0 (no saves, no keys).
+    mov     r1, 0x40005b18
+    ldh     r1, [r1]
+    mov     r14, 0
+    cmp     r1, 0x3730
+    beq     98f
+    cmp     r1, 0x3032
+    bne     13f
+98:
     mov     r0, 0
     bl      arg_int
     mov     r15, r0
@@ -616,7 +632,7 @@ def build(address, size=256, path="b:\\save.dat", fill=0xFF):
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("stub.s", "stub.o", "stub.elf", "stub.bin"))
-        open(s, "w").write(src)
+        open(s, "w").write(bioscall.portable(src))
         for cmd in ([exe("as"), "-mcpu=arc600", "-o", o, s],
                     [exe("ld"), "-EL", "-Ttext", f"{address:#x}", "-e", "_start", "-o", e, o],
                     [exe("objcopy"), "-O", "binary", "-j", ".text", e, b]):

@@ -378,3 +378,27 @@ Talking Words Factory has 0x2000/3 and /5 too; using the last one broke it.
 * A dump can be booted as a cartridge for comparison: `sdboot-emu --cart DUMP --script
   cartboot/setup.txt` (first-time setup, sign-in, power cycle). The BIOS refuses cartridges with a bad
   checksum, so that only works for good dumps.
+
+## 8. Other Leapster 2 BIOSes: the Connected's B5 (2026-10-26)
+* **The 0.2.0 bug (VERIFIED-EMU, matches the users' report):** the stubs (eestub, nativechip,
+  streamstub) called BIOS functions at BIOS 0.6's addresses. On a Leapster Connected (BIOS B5,
+  152-12076) those addresses are other code: a game started from the menu got as far as reading its
+  `game.bin`, then the console restarted twice more and stopped at Sign In (emulator; on real B5
+  consoles it stayed on "Loading…" and the card's FAT was scrambled, most likely by the same wild
+  calls, UNVERIFIED). A card built with 0.2.0 code, run from power-on in the emulator, shows it.
+* **Fix (0.2.1):** `research/bioscall.py` rewrites every BIOS call in the stubs' assembly to go
+  through the BIOS service table (`[gp + 4]`, the same in every BIOS), and picks the Flash player's
+  addresses by the BIOS part number at 0x4000_5B18 ("20" 0.6, "07" B5). The stubs install themselves
+  only on those two BIOSes; elsewhere they do nothing (no saves, no HINT + A + B). VERIFIED-EMU: games
+  run on B5 from power-on, save, go back with HINT + A + B and start again; 0.6 unchanged.
+* **The menu music** is made with any Leapster 2 BIOS (0.6, B5, CIP3 m9): the instrument and
+  frequency tables are found where each BIOS keeps them (`biosbank2sf2.program_table`,
+  `musicrender.freq_table`); the menus come out byte-identical. CIP3 m9 has no SD slot.
+* **A false lead, for the record:** a B5 home-screen save state with a different card swapped in
+  (`load` + `card`) hangs in B5's version walk (0x4005_1C84) after the warm restart, with RAM showing
+  one 512-byte block repeated from offset 0x1000. From power-on with the same card it doesn't happen;
+  most likely B5 keeps the card's file system state in RAM across warm restarts and a card changed
+  under a saved state reads stale clusters (HYPOTHESIS). Test B5 from power-on
+  (`D:\leaploader-tmp\b5\setup2.txt` without its `save` line), never with a swapped card.
+  SDHC is not a problem either: Ribbit's optional SDHC card (`RIBBIT_SDHC=1`) runs the same flow with
+  block addressing throughout (VERIFIED-EMU).

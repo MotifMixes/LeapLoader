@@ -46,7 +46,7 @@ xattr -dr com.apple.quarantine /Applications/LeapLoader.app
 3. Add your games: **+  Add roms…** for some dumps, or **📁  Add a folder of dumps…** for every dump in a folder. If you use the Ribbit emulator, **🐸  Import Ribbit's Rom Folder** adds the dumps from its games folder. See [Choosing games](03-choosing-games.md).
 4. Games LeapLoader knows show **Compatible** and are switched on. The others show **Incompatible** and stay off.
 5. On the right, under **Menu**, leave **LeapLoader (Recommended)** chosen.
-6. LeapLoader's menu needs your **Leapster 2 BIOS 0.6** dump for its music. If you use Ribbit, LeapLoader finds the one picked there. If not, the **Card** panel says so: click **Choose your Leapster 2 BIOS…** and pick the file. See [Settings](07-settings.md#leapster-2-bios).
+6. LeapLoader's menu needs your **Leapster 2 BIOS** dump for its music. If you use Ribbit, LeapLoader finds the one picked there. If not, the **Card** panel says so: click **Choose your Leapster 2 BIOS…** and pick the file. See [Settings](07-settings.md#leapster-2-bios).
 7. Under **Output folder**, click **Choose…** and pick the SD card's drive (put the card in the computer's card reader first). You can also pick any folder and copy what LeapLoader makes there to the root of the SD card afterwards.
 8. Click **Build card (N games)**. A bar shows how far it has got. When it's done, LeapLoader says **Card built: N games**.
 9. Eject the card (on Windows, **Safely Remove Hardware**; on Linux and macOS, eject it in the file manager or Finder), put it in the Leapster 2, turn it on and sign in. Tap the SD icon on the home screen, then pick a game with the D-pad and **A**. See [On the Leapster 2](05-on-the-leapster-2.md).

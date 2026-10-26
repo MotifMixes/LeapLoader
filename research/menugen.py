@@ -29,7 +29,7 @@ from swfgen import (RAW_FIRST_HANDLE, SEQ_FIRST_HANDLE, AS, approval_fields, bit
                     define_sprite, define_text, do_action, method, pack_rib, place, place_enterframe, rounded_rects,
                     set_property, show_frame, swf, tag)
 
-VERSION = "0.1.0"  # matches the desktop app (user, 2026-10-25); the menu was called v0.3.0 in earlier notes
+VERSION = "0.2.1"  # matches the desktop app (app/Cargo.toml; user, 2026-10-25); the menu was called v0.3.0 in earlier notes
 
 TOP = 44            # list area top
 PITCH = 24          # row pitch

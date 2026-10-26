@@ -760,4 +760,10 @@ fn main() {
         if ee.cart.is_some() { "present" } else { "absent" }
     );
     println!("final pc {:08x}, B008 {:#x}, restarts {}", m.cpu.pc, m.io.leapster2_power.unwrap()[1], m.restarts);
+    if let Some(sd) = m.io.sd.as_ref() {
+        let hc = sd.card.as_ref().is_some_and(|c| c.hc);
+        let rw: Vec<_> = sd.log.iter().filter(|l| l.0 == 17 || l.0 == 24).collect();
+        let odd = rw.iter().filter(|l| l.1 % 512 != 0).count();
+        println!("sd: hc {hc}, {} reads/writes, {odd} with an argument not a multiple of 512", rw.len());
+    }
 }

@@ -1,6 +1,6 @@
 # On the Leapster 2
 
-> Everything on this page has been seen in the Ribbit emulator's Leapster 2 (BIOS 0.6), not yet on a real console.
+> Everything on this page has been seen in the Ribbit emulator's Leapster 2 (BIOS 0.6, and the Connected's B5), not yet on a real console.
 
 ## Starting the menu
 

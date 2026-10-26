@@ -24,13 +24,13 @@ On macOS, the first start needs **Open** from the right-click menu; see [Getting
 
 ## The Build card button can't be clicked
 
-The words under it say why. With **LeapLoader (Recommended)** as the menu, it says "Choose your Leapster 2 BIOS 0.6 dump first" when LeapLoader has no Leapster 2 BIOS yet: click **Choose your Leapster 2 BIOS…** and pick your BIOS 0.6 dump. See [Settings](07-settings.md#leapster-2-bios).
+The words under it say why. With **LeapLoader (Recommended)** as the menu, it says "Choose your Leapster 2 BIOS dump first" when LeapLoader has no Leapster 2 BIOS yet: click **Choose your Leapster 2 BIOS…** and pick your BIOS dump. See [Settings](07-settings.md#leapster-2-bios).
 
 ## The build stops: "the menu music can't be made"
 
 The menu's music is made with your Leapster 2 BIOS, and the file chosen can't be used. The rest of the line says why:
 
-- **is not the Leapster 2 BIOS 0.6 (152-12206)**: the file is another BIOS version, or a damaged dump. Only 0.6 works. Choose another file in **File › Settings… › Leapster 2 BIOS**.
+- **is not a Leapster 2 BIOS**: the file is another BIOS (for example the first Leapster's), or a damaged dump. 0.6, B5 and m9 work. Choose another file in **File › Settings… › Leapster 2 BIOS**.
 
 Music can be switched off on the console: **Pause › Music: On / Off** in the menu. It can't be left off the card.
 

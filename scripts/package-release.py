@@ -92,8 +92,8 @@ README = """LeapLoader {version} - your own Leapster cartridges on a Leapster 2'
 LeapLoader converts your own Leapster cartridge dumps so they run from an SD
 card on a Leapster 2, with a menu to pick a game, working saves, and
 HINT + A + B to go back to the menu. No games and no BIOS are included: you
-need dumps of your own cartridges, and of your Leapster 2's BIOS 0.6
-(152-12206), whose instruments play the menu's music.
+need dumps of your own cartridges, and of your Leapster 2's BIOS (0.6,
+Connected B5 or CIP3 m9), whose instruments play the menu's music.
 
 So far LeapLoader has been tested only in the Ribbit emulator, NOT on a real
 Leapster 2. Use it at your own risk, and copy your SD card's files somewhere

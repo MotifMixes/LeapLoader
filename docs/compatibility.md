@@ -5,7 +5,7 @@ Last updated 2026-10-26 (LeapLoader 0.2.0).
 
 > [!WARNING]
 > **Nothing has been tested on a real Leapster 2 yet.** Every result below comes from the
-> [Ribbit](https://github.com/MotifMixes/Ribbit) emulator, with the Leapster 2 BIOS 0.6 (152-12206). A game that
+> [Ribbit](https://github.com/MotifMixes/Ribbit) emulator, with the Leapster 2 BIOS 0.6 (152-12206); a sample was also run with the Connected's BIOS B5. A game that
 > works there will very probably work on the console, but it has not been seen. Copy your SD card's files
 > somewhere before you try a card, and please report what happens.
 

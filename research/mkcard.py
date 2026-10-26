@@ -11,7 +11,7 @@ Usage: python mkcard.py [--menu leaploader|MENU.lfp|SDMenu.bin] [--music SONG.mi
  sequencer plays instead of the clip, by BIOS program number, "drums" = the drum tracks; default drums;
  --short: tracks whose notes play their sample once, without looping it; --floor: a track's softer notes
  play at that velocity)
-(--bios: the Leapster 2 BIOS 0.6 dump whose instruments render the music; --music needs it)
+(--bios: a Leapster 2 BIOS dump (0.6, B5 or m9) whose instruments render the music; --music needs it)
 (folders: every .bin in them)
 
 OUT_DIR receives, ready to copy to the root of the card:
@@ -119,16 +119,19 @@ def console_programs(music, spec):
     return out
 
 
-# The BIOS the music is rendered with: 0.6, the version musicrender's addresses are for.
-BIOS_06_CRC = 0xFA94D9A7
+# The BIOSes the music can be rendered with: every Leapster 2 BIOS (the same instruments; their
+# tables are found wherever each keeps them, biosbank2sf2.program_table, musicrender.freq_table).
+LEAPSTER2_BIOSES = {0xFA94D9A7: "0.6 (152-12206)", 0x4D223022: "Connected B5 (152-12076)",
+                    0x57BDE604: "CIP3 m9 (152-12659)"}
 
 
 def music_bios_problem(bios):
     """Why `bios` can't render the menu music, or None if it can."""
     if not bios or not os.path.isfile(bios):
         return "no Leapster 2 BIOS given (--bios)"
-    if zlib.crc32(open(bios, "rb").read()) != BIOS_06_CRC:
-        return f"{os.path.basename(bios)} is not the Leapster 2 BIOS 0.6 (152-12206)"
+    if zlib.crc32(open(bios, "rb").read()) not in LEAPSTER2_BIOSES:
+        return (f"{os.path.basename(bios)} is not a Leapster 2 BIOS (0.6 152-12206, Connected B5 152-12076 or "
+                f"CIP3 m9 152-12659)")
     return None
 
 

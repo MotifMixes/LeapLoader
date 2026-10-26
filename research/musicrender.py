@@ -42,7 +42,22 @@ RATE = 48000          # render rate
 OUT_RATE = 8000       # LF_PlayAudioRaw's rate
 UP = 16               # sample upsampling before interpolation
 RELEASE_S = 0.005
-FREQ_TABLE = 0x400F_D2B0
+FREQ_TABLE = 0x400F_D2B0  # BIOS 0.6 (B5 0x400F_A174, m9 0x4010_0EC0): see freq_table
+
+
+def freq_table(bios):
+    """The 128 note frequencies (A4 = 440 Hz, equal temperament), found by their values, so every
+    Leapster 2 BIOS works (2026-10-26). None if the BIOS has no such table."""
+    pat = struct.pack("<f", 440.0)
+    i = bios.find(pat)
+    while i != -1:
+        base = i - 69 * 4
+        if base >= 0 and i % 4 == 0:
+            f = struct.unpack_from("<128f", bios, base)
+            if all(abs(f[k] / (440.0 * 2 ** ((k - 69) / 12)) - 1) < 1e-3 for k in range(1, 128)):
+                return f
+        i = bios.find(pat, i + 1)
+    return None
 DEFAULT_BIOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Ribbit", "roms", "bios",
                             "leapster2", "152-12206_0.6.bin")
 B = biosbank2sf2.B
@@ -174,7 +189,9 @@ def render(midi_path, bios_path=DEFAULT_BIOS, stems_dir=None, report=None, loop_
     then "make it as long as the sample")."""
     bios = open(bios_path, "rb").read()
     programs = biosbank2sf2.read_bank(bios)
-    freqs = struct.unpack_from("<128f", bios, FREQ_TABLE - B)
+    freqs = freq_table(bios)
+    if freqs is None:
+        raise SystemExit("no note frequency table in this BIOS; is it a Leapster 2 BIOS dump?")
     tracks, division, tempos = seqgen.read_midi(midi_path)
     sec = _seconds(tempos, division)
     all_notes = [n for _, ns in tracks for n in ns]

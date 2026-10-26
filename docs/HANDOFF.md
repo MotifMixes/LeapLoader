@@ -1,6 +1,26 @@
 # LeapLoader handoff notes (updated 2026-10-25, late session)
 
-## START HERE (2026-10-25, late: saves in the stub, Cars, menu paging, console drums, USB, repo)
+## START HERE (2026-10-26: release prep)
+* **Release prep (2026-10-26), nothing committed yet:** `scripts/package-release.py` builds
+  `LeapLoader-<ver>-windows-x64.zip` (LeapLoader.exe, nativescan.exe, arc-gnu\ binutils from Ribbit's
+  tools, the research scripts mkcard imports, README.txt, LICENSE.txt, notices + binutils source note,
+  TESTING-USB.txt; refuses unlisted files and home paths/emails; UTC zip times; Rust paths remapped).
+  The app finds nativescan and `arc-gnu\` beside itself (sets NATIVESCAN / ARC_GNU), has a
+  **Leapster 2 BIOS** setting (default: Ribbit's `bios_picked`), passes `mkcard --bios`; mkcard
+  builds the menu **without music** (a `note` line) when the BIOS isn't 0.6 (CRC 0xFA94D9A7) or
+  numpy/scipy are missing. Welcome sound ships pre-encoded (`assets/welcome.alaw`, no ffmpeg needed).
+  Dev build: copy nativescan.exe beside `D:/leaploader-tmp/target-app/release/leaploader.exe` (the
+  hard-coded dev path was removed: it was a build-machine path in the binary).
+  Red "Use at your own risk / not tested on real hardware" box in the Card panel and About (user asked).
+  User docs: README rewritten, `docs/manual/` (8 pages), `docs/compatibility.md`.
+* **HINT + A + B: 77 of 77 go back** (VERIFIED-EMU, `D:\leaploader-tmp
+ative\g8`, script
+  `run_all8.py`): RAM-chip stub got the ButtonMPI 4 s fallback; both stubs pre-write PlayGame.lnk and
+  restart with LC_Boot("ExtStorage") from the button task (how-it-works 3). Converter relocates
+  0x100D handle lists (how-it-works 5): Cosmic Math, Letterpillar, Number Raiders, Word Chasers had
+  never run past their first sound.
+
+## Earlier (2026-10-25, late: saves in the stub, Cars, menu paging, console drums, USB, repo)
 State in one place; details in the sections below and in how-it-works.md, games.md, usb-research.md.
 * **Git**: private repo https://github.com/MotifMixes/LeapLoader (main). Commits by MotifMixes only
   (noreply email, +0000 dates, no Claude/Anthropic attribution: user's rule). README has Ribbit's AI
@@ -15,22 +35,25 @@ State in one place; details in the sections below and in how-it-works.md, games.
   (marker bytes) and writes back in Cars and 1st Grade; 1st Grade title 4 s sooner (100.0 vs 104.0 s).
 * **Cars HINT + A + B fixed** (VERIFIED-EMU): the AS save writer joined a 2 KB chip into 4096
   characters (~10 s, script killed before BT_StartSDMenu). Native writing fixed it.
-* **77-game regression with the new saves NOT finished** (user stopped it to save usage): 9 run;
-  7 went back with HINT + A + B; **Animal Genius and Cosmic Math did not** (Cosmic Math: no save
-  written either). Script `D:\leaploader-tmp\native\run_all3.py`, results `native\g3\`. Check these
-  two before a release.
+* 77-game regression: done 2026-10-26, see START HERE.
 * **Menu** (research/menugen.py, v0.1.0): "My Games: N", "Page n/m" in the footer, page arrows /
   D-pad left-right move whole pages (multiples of 4) and wrap (last <-> first), title in the app's
   purple (0xA090F0), only rows in view are visible (77 visible rows made a page turn ~0.5 s and fast
   taps queued). All VERIFIED-EMU.
 * **Music**: clip rendered with a steep 3.85 kHz filter + EQ for Ribbit's interpolator + noise-shaped
-  A-law (musicrender.py). **Drums, flute (073), bass (038), guitar (031) are played by the console's sequencer**
-  (`--console drums,73,38,31`, guitar 031 added: 85 of its 222 notes fit; key-0 drum hits and notes with no free voice stay in the clip); clip
+  A-law (musicrender.py). **Drums, flute (073), bass (038) are played by the console's sequencer**
+  (`--console drums,73,38`; key-0 drum hits and notes with no free voice stay in the clip). The guitar
+  was tried there and taken off (user): on the sequencer it took voices from the bass from the
+  prechorus on (29 bass notes fell back to the clip, which the user heard as the bass dropping out).
+  The guitar is back to 031 "Gtr Harmonics" in the clip (user preferred it to Nylon 024), its notes
+  played once without the sample loop, each for its whole sample whatever the note length
+  (`--short 31`; the loop sounded like a stuck repeat; user: "as long as the sample"). The bass plays its soft notes (~0:40-0:50) at velocity 96 (`--floor 38:96`; user:
+  "too quiet" there; VERIFIED-EMU that the console bass never stopped); clip
   loop on the 4 ms grid; sequence 6 ms early; volume curve measured (SEQ_VOLUME_CURVE). Sync
   VERIFIED-EMU (drums vs clip 5-7 ms, < 2 ms change over 2.5 loops).
-* **Card**: `D:\leaploader-tmp\ribbitcard3\sdcard-new.img` = new menu + music (drums/flute/bass/guitar),
+* **Card**: `D:\leaploader-tmp\ribbitcard3\sdcard-new.img` = new menu + music (drums/flute/bass on the console),
   but the games are still the OLD conversions (built before the save changes). Not installed yet
-  (Ribbit open). Rebuild games: mkcard into `tree` (both carts folders, `--console drums,73,38,31`),
+  (Ribbit open). Rebuild games: mkcard into `tree` (both carts folders, `--console drums,73,38`),
   then `sdboot-emu --tree tree --script exp.txt`. Menu-only rebuild script: scratchpad `remenu.py`.
 * **USB VERIFIED-EMU end to end** (Ribbit's emulated L2 USB + usbip-win2): find, C2 mount (UAC),
   J: appears, mkcard writes, eject (flush, dismount, C6); the written files are byte-exact in the

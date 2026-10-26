@@ -138,23 +138,30 @@ pub fn dumps_in(folder: &Path) -> Vec<PathBuf> {
 /// `rom_folders` in its settings.toml (Ribbit's settings.rs keeps it in
 /// %APPDATA%\Ribbit, else ~/.config/ribbit). Only folders that are there.
 pub fn ribbit_rom_folders() -> Vec<PathBuf> {
-    let dir = if let Some(appdata) = std::env::var_os("APPDATA") {
-        PathBuf::from(appdata).join("Ribbit")
-    } else if let Some(xdg) = std::env::var_os("XDG_CONFIG_HOME") {
-        PathBuf::from(xdg).join("ribbit")
-    } else if let Some(home) = std::env::var_os("HOME") {
-        PathBuf::from(home).join(".config").join("ribbit")
-    } else {
-        return Vec::new();
-    };
-    let Ok(text) = std::fs::read_to_string(dir.join("settings.toml")) else {
-        return Vec::new();
-    };
-    let Ok(table) = text.parse::<toml::Table>() else {
+    let Some(table) = ribbit_settings() else {
         return Vec::new();
     };
     let folders = table.get("rom_folders").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     folders.iter().filter_map(|v| v.as_str()).map(PathBuf::from).filter(|p| p.is_dir()).collect()
+}
+
+/// The Leapster 2 BIOS picked in the Ribbit emulator, if it is there.
+pub fn ribbit_leapster2_bios() -> Option<PathBuf> {
+    let table = ribbit_settings()?;
+    let picked = table.get("bios_picked")?.get("Leapster 2")?.as_str()?;
+    Some(PathBuf::from(picked)).filter(|p| p.is_file())
+}
+
+/// The Ribbit emulator's settings.toml, if it has one.
+fn ribbit_settings() -> Option<toml::Table> {
+    let dir = if let Some(appdata) = std::env::var_os("APPDATA") {
+        PathBuf::from(appdata).join("Ribbit")
+    } else if let Some(xdg) = std::env::var_os("XDG_CONFIG_HOME") {
+        PathBuf::from(xdg).join("ribbit")
+    } else {
+        PathBuf::from(std::env::var_os("HOME")?).join(".config").join("ribbit")
+    };
+    std::fs::read_to_string(dir.join("settings.toml")).ok()?.parse().ok()
 }
 
 /// About how much room the card takes with these games: each converted

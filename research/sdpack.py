@@ -212,6 +212,17 @@ def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="L
                             reloc(blob + k)
                 if ee_size & (ee_size - 1) or not 32 <= ee_size <= 0x10000:
                     ee_size = 256
+            elif tag == 0x100D and u32(blob) == 0x0100_0100 and inside(u32(blob + 8)):
+                # Handle lists {0x0100_0100, kind, pairs}: pairs {count, address of count handles}
+                # until a count of 0 (or a word that is no address). Cosmic Math, Letterpillar,
+                # Number Raiders, Word Chasers and Batman read sound handles through them: left
+                # pointing at the cartridge they read 0 and the BIOS asserts "ResolveHandle(x0)Fail"
+                # (VERIFIED-EMU). Native-code scanning found these pairs only in some games.
+                p = off(u32(blob + 8))
+                while p + 8 <= size and 0 < u32(p) < 0x10000 and inside(u32(p + 4)) \
+                        and off(u32(p + 4)) + 4 * u32(p) <= size:
+                    reloc(p + 4)
+                    p += 8
             elif tag == 0x2000 and rid == 1:  # Talking Words Factory has 0x2000/3 and /5 too
                 main_handle = u32(blob + 12)
             # tag 0x2000: {0x00010100, 0, 0, main movie handle}. The handle (e.g.

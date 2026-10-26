@@ -180,6 +180,21 @@ holding HINT + A + B for 2.5 s goes back to the menu the same way.
   "SDMenu\SDMenu.bin"), then 0x4002_2AA8(path), which writes `PlayGame.lnk` and restarts the console
   into the menu. The chip writes every save at once, so nothing is pending.
 
+**Fallback for screens where no script runs** (2026-10-26, VERIFIED-EMU: all 77 dumps go back): on
+name-entry keyboards and during videos the game's ActionScript doesn't run, so neither the prompt nor
+the save flusher sees the keys (Sonic X, NASCAR, Schoolhouse Rock; it was always so, also with the
+old AS shim). The RAM chip stub (`eestub.py`) now wraps ButtonMPI's poll too, like the native chip;
+held 4 s (after the prompt would already have gone back) it restarts into the menu.
+* **No file access from the button task.** A save written from it hung the console while
+  Schoolhouse Rock streamed a video from the card, and BT_StartSDMenu's own PlayGame.lnk write from
+  it failed (console went to its home screen: the WALL-E prototype's "Base selected").
+* So both stubs write **PlayGame.lnk = the menu's path** once at install, in the game's context
+  (as 0x4002_2AA8 does: path 0x400F_16C8, .lnk path 0x400F_1724(buf, 260, 1), fopen "w+",
+  fwrite(strlen)), and the poll only calls **LC_Boot("ExtStorage")** (0x400F_0674 with 0x400F_78FC),
+  the restart that reads it. A power-on still boots the console's home screen (it ignores the .lnk).
+* Saves still pending when the fallback fires are not written (they are written 10 quiet frames
+  after each change, so normally nothing is pending).
+
 The [gp+4] structure is a list of BIOS services `{0, descriptor table, function table}`, one every
 12 bytes; the function tables end with the service's name (ButtonMPI at +0x7C, EEpromMPI at +0x88,
 the Flash player's at +0x64).
@@ -264,6 +279,16 @@ Only fields whose meaning is known are rewritten; unknown resource types make th
   entries). Relocating them broke both games' native apps (white/black screens) until 2026-10-25.
   No exception is made for handles that equal a resource's address (0x8000_0000 is also the
   header, 0x8000_0010 the 0x1001 list): making one broke Go Diego Go again.
+* **0x100D/11 handle lists** `{0x0100_0100, kind, pairs}` (fixed 2026-10-26, VERIFIED-EMU): pairs
+  `{count, address of count handles}` up to a count of 0; each address is relocated. nativescan found
+  them only where they lie in native data, so in Cosmic Math, Letterpillar, Number Raiders, Word
+  Chasers, The Batman: Strength in Numbers, Rock the World (3), WALL-E (48) and 2nd Grade (1) some
+  stayed at 0x8000_xxxx. The game then read its sound handles from the empty cartridge window, got
+  0, and at the first sound the BIOS asserted `{ResolveHandle(x0)Fail}` (message saved at
+  0x0300_FF00, B008 bit 0 set) and restarted to its home screen ("Base selected"). The four 4 MiB
+  games never got past their first sound before this; their "name entry" screenshots were the
+  console's own profile keyboard. Traced: sound request 0x4002_EFC8 (handle in r0) <- game code
+  reading `[[obj + 0x1C] + 4 * index]`, obj = 0x8000_1B14 (Cosmic Math) = the pair list.
 * The header checksum (one word every 0xF94 bytes, BIOS 0x4005_28A4) is recomputed.
 
 ### Dump problems handled

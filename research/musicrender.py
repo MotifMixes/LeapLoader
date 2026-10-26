@@ -20,7 +20,7 @@ at the song's end carry over into the loop start (`loop_start`), so the loop is 
 filtered and resampled to 8 kHz (the console's raw-sound rate), dithered and A-law encoded.
 
 The rendered audio contains the BIOS's instrument samples: keep the stems and previews private
-(local/ or D:\\leaploader-tmp), never commit them.
+(local/ or a scratch folder outside the repository), never commit them.
 
 Usage: python musicrender.py SONG.mid OUT_DIR [LOOP_START_SECONDS]
        (OUT_DIR gets the stems, mix-48k.wav, music-8k.wav)
@@ -156,7 +156,8 @@ def _seconds(tempos, division):
     return conv
 
 
-def render(midi_path, bios_path=DEFAULT_BIOS, stems_dir=None, report=None, loop_start=0.0, console_programs=()):
+def render(midi_path, bios_path=DEFAULT_BIOS, stems_dir=None, report=None, loop_start=0.0, console_programs=(),
+           short_programs=(), velocity_floor=None):
     """MIDI -> 8 kHz A-law bytes: the song once, from its start to its end. `loop_start`: where the
     song continues after its end (seconds), so notes ringing past the end are added there.
     `console_programs`: tracks the console plays itself on its sequencer's 5 voices (user
@@ -165,7 +166,12 @@ def render(midi_path, bios_path=DEFAULT_BIOS, stems_dir=None, report=None, loop_
     looping from `loop_start`, see console_voices / console_sequence), except key 0, which the
     sequencer cannot play (0 is a rest there), and notes that find no free voice: those stay in the
     clip. The clip's loop is then a whole number of sequencer ticks (4 ms), so the two keep time
-    loop after loop."""
+    loop after loop.
+    `velocity_floor`: {program: lowest velocity}: softer notes of that track play at it (user: the
+    bass, soft from ~0:40 to 0:50, was "too quiet"; 96 is its level elsewhere).
+    `short_programs`: tracks whose notes play their whole sample once, without its loop, however
+    long or short the note (user: the guitar's short sample loop was "that awful repeating sound";
+    then "make it as long as the sample")."""
     bios = open(bios_path, "rb").read()
     programs = biosbank2sf2.read_bank(bios)
     freqs = struct.unpack_from("<128f", bios, FREQ_TABLE - B)
@@ -182,6 +188,8 @@ def render(midi_path, bios_path=DEFAULT_BIOS, stems_dir=None, report=None, loop_
     cache, stems, counts = {}, [], []
     console_buf = np.zeros(total, dtype=np.float64)
     voices, on_console = [], set()
+    floor = velocity_floor or {}
+    tracks = [(name, [(s, e, n, max(v, floor.get(int(name), 0))) for s, e, n, v in ns]) for name, ns in tracks]
     if console_programs:
         wanted = [(sec(s), sec(min(e, end_tick)), int(name), note, vel, (name, k))
                   for name, ns in tracks if ns and int(name) in console_programs
@@ -208,12 +216,14 @@ def render(midi_path, bios_path=DEFAULT_BIOS, stems_dir=None, report=None, loop_
             step = freq * z["scale"] / 32768.0 * OUT_RATE / RATE   # source samples per output sample
             a = int(round(sec(s) * RATE))
             n = int(round(sec(min(e, end_tick)) * RATE)) - a
+            if program in short_programs:
+                n = int((length - 1) / step)        # the whole sample, however long the note
             if n <= 0:
                 continue
             n += release
             pos = step * np.arange(n, dtype=np.float64)
             ls, le = z["loop_start"] - z["start"], min(z["loop_end"] - z["start"] + 1, length)
-            if le - ls >= 2:
+            if le - ls >= 2 and program not in short_programs:
                 over = pos >= le
                 pos[over] = ls + np.mod(pos[over] - ls, le - ls)
             else:

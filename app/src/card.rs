@@ -19,10 +19,6 @@ use std::time::Duration;
 /// removed after the build.
 const STAGING: &str = ".leaploader-unzipped";
 
-/// Where nativescan was built on the PC LeapLoader is developed on (docs/
-/// HANDOFF.md); used when the setting is empty and the file is there.
-const DEV_NATIVESCAN: &str = "D:/leaploader-tmp/target-nativescan/release/nativescan.exe";
-
 /// The research folder: the setting, else the first `research` folder with
 /// mkcard.py beside the program or above it (a release would ship it next
 /// to the program), else the one in the source tree this app was built from.
@@ -38,15 +34,40 @@ pub fn research_dir(settings: &Settings) -> Option<PathBuf> {
         v
     });
     // (A build-tree fallback: the target folder is often elsewhere, e.g. on
-    // another drive, so the program's folder alone may not lead there.)
+    // another drive, so the program's folder alone may not lead there. Left
+    // out of release packages, scripts/package-release.py: it would put the
+    // build machine's folder in the program.)
+    #[cfg(not(leaploader_release))]
     let from_source = Path::new(env!("CARGO_MANIFEST_DIR")).parent().map(|p| p.join("research"));
+    #[cfg(leaploader_release)]
+    let from_source: Option<PathBuf> = None;
     from_exe.chain(from_cwd).chain(from_source).find(|d| has_mkcard(d))
 }
 
-/// nativescan for the NATIVESCAN variable: the setting, else the
-/// developer's build if it is there (None: mkcard looks in its own folder).
+/// nativescan for the NATIVESCAN variable: the setting, else the one
+/// beside the program, if it is there (None: mkcard looks in its own folder;
+/// a development build gets a copy beside it, docs/HANDOFF.md).
 pub fn default_nativescan(settings: &Settings) -> Option<PathBuf> {
-    settings.nativescan.clone().or_else(|| Some(PathBuf::from(DEV_NATIVESCAN)).filter(|p| p.is_file()))
+    let beside_exe = || std::env::current_exe().ok().and_then(|e| Some(e.parent()?.join(NATIVESCAN_EXE)));
+    settings.nativescan.clone().or_else(|| beside_exe().filter(|p| p.is_file()))
+}
+
+/// nativescan's file name (a release ships it beside the program).
+const NATIVESCAN_EXE: &str = if cfg!(windows) { "nativescan.exe" } else { "nativescan" };
+
+/// The ARC binutils the save stubs are assembled with (the ARC_GNU
+/// variable): the `arc-gnu` folder a release ships beside the program
+/// (None: the scripts' default, Ribbit's tools/arc-gnu).
+pub fn bundled_arc_gnu() -> Option<PathBuf> {
+    let dir = std::env::current_exe().ok()?.parent()?.join("arc-gnu");
+    let assembler = if cfg!(windows) { "arc-elf32-as.exe" } else { "arc-elf32-as" };
+    dir.join(assembler).is_file().then_some(dir)
+}
+
+/// The Leapster 2 BIOS the menu music is rendered with: the setting, else
+/// the one picked in Ribbit (None: mkcard's default, else no music).
+pub fn find_bios(settings: &Settings) -> Option<PathBuf> {
+    settings.bios.clone().or_else(crate::games::ribbit_leapster2_bios)
 }
 
 /// Where the card keeps the menu the SD icon boots.
@@ -68,16 +89,30 @@ pub fn leapfrog_menu_in(out: &Path) -> Option<PathBuf> {
 const MENU_MUSIC: &[u8] = include_bytes!("../assets/menumusic.mid");
 const MENU_MUSIC_LOOP: &str = "20.21";
 /// The song's parts the console's own sequencer plays (user's choice): the
-/// drums, flute (73), bass (38) and guitar (31); the rest is the rendered clip.
-const MENU_MUSIC_CONSOLE: &str = "drums,73,38,31";
+/// drums, flute (73) and bass (38); the rest is the rendered clip (the guitar
+/// on it took voices from the bass, which then dropped to the clip).
+const MENU_MUSIC_CONSOLE: &str = "drums,73,38";
+/// Parts whose notes play their sample once, without its loop (the guitar,
+/// 31: its short loop sounded like a stuck repeat when notes were held).
+const MENU_MUSIC_SHORT: &str = "31";
+/// The bass (38) plays its soft notes at velocity 96, its level elsewhere
+/// (it was too quiet from ~0:40 to 0:50).
+const MENU_MUSIC_FLOOR: &str = "38:96";
 /// The sound LeapLoader's menu plays when it starts ("Welcome to LeapLoader.
-/// Select a game."), baked in too: LeapLoader's assets/welcome.mp3.
-const WELCOME: &[u8] = include_bytes!("../../assets/welcome.mp3");
+/// Select a game."), baked in too: LeapLoader's assets/welcome.alaw (welcome.mp3
+/// already as the menu plays it, so the build needs no ffmpeg).
+const WELCOME: &[u8] = include_bytes!("../../assets/welcome.alaw");
 
 /// mkcard.py's arguments after the script: options, OUT_DIR, the dumps.
 /// `sounds`: the menu music's and the welcome sound's files (LeapLoader's
 /// menu only).
-pub fn mkcard_args(menu: &Menu, sounds: Option<(&Path, &Path)>, out: &Path, dumps: &[PathBuf]) -> Vec<OsString> {
+pub fn mkcard_args(
+    menu: &Menu,
+    sounds: Option<(&Path, &Path)>,
+    bios: Option<&Path>,
+    out: &Path,
+    dumps: &[PathBuf],
+) -> Vec<OsString> {
     let mut args: Vec<OsString> = Vec::new();
     match menu {
         Menu::LeapFrog(lfp) => args.extend(["--menu".into(), lfp.into()]),
@@ -86,8 +121,12 @@ pub fn mkcard_args(menu: &Menu, sounds: Option<(&Path, &Path)>, out: &Path, dump
         Menu::LeapLoader => {
             if let Some((music, welcome)) = sounds {
                 args.extend(["--music".into(), music.into(), "--music-loop".into(), MENU_MUSIC_LOOP.into()]);
-                args.extend(["--console".into(), MENU_MUSIC_CONSOLE.into()]);
+                args.extend(["--console".into(), MENU_MUSIC_CONSOLE.into(), "--short".into(), MENU_MUSIC_SHORT.into()]);
+                args.extend(["--floor".into(), MENU_MUSIC_FLOOR.into()]);
                 args.extend(["--welcome".into(), welcome.into()]);
+                if let Some(bios) = bios {
+                    args.extend(["--bios".into(), bios.into()]);
+                }
             }
         }
     }
@@ -137,16 +176,20 @@ impl Build {
         let music = staging.join("menumusic.mid");
         std::fs::create_dir_all(&staging)?;
         std::fs::write(&music, MENU_MUSIC)?;
-        let welcome = staging.join("welcome.mp3");
+        let welcome = staging.join("welcome.alaw");
         std::fs::write(&welcome, WELCOME)?;
         let mut cmd = Command::new(&settings.python);
         // -I: none of the user's Python settings or packages folder; -u: lines
         // as they come; -X utf8: text in UTF-8 whatever the console's code page.
         cmd.args(["-I", "-u", "-X", "utf8"]).arg(research.join("mkcard.py"));
-        cmd.args(mkcard_args(&settings.menu, Some((&music, &welcome)), out, &paths));
+        let bios = find_bios(settings);
+        cmd.args(mkcard_args(&settings.menu, Some((&music, &welcome)), bios.as_deref(), out, &paths));
         cmd.current_dir(research.parent().unwrap_or(&research));
         if let Some(ns) = default_nativescan(settings) {
             cmd.env("NATIVESCAN", ns);
+        }
+        if let Some(arc) = bundled_arc_gnu() {
+            cmd.env("ARC_GNU", arc);
         }
         cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
         // No console window for the child (the app itself has none).
@@ -296,14 +339,33 @@ mod tests {
     #[test]
     fn options_then_out_dir_then_dumps() {
         let sounds = Some((Path::new("m.mid"), Path::new("w.mp3")));
-        let args = mkcard_args(&Menu::LeapLoader, sounds, Path::new("out"), &["a.bin".into()]);
+        let args =
+            mkcard_args(&Menu::LeapLoader, sounds, Some(Path::new("b.bin")), Path::new("out"), &["a.bin".into()]);
         let args: Vec<_> = args.iter().map(|a| a.to_string_lossy().into_owned()).collect();
         assert_eq!(
             args,
-            ["--music", "m.mid", "--music-loop", "20.21", "--console", "drums,73,38,31", "--welcome", "w.mp3", "out", "a.bin"]
+            [
+                "--music",
+                "m.mid",
+                "--music-loop",
+                "20.21",
+                "--console",
+                "drums,73,38",
+                "--short",
+                "31",
+                "--floor",
+                "38:96",
+                "--welcome",
+                "w.mp3",
+                "--bios",
+                "b.bin",
+                "out",
+                "a.bin"
+            ]
         );
         // LeapFrog's menu has no music or welcome sound.
-        let args = mkcard_args(&Menu::LeapFrog("x.lfp".into()), sounds, Path::new("out"), &[]);
+        let args =
+            mkcard_args(&Menu::LeapFrog("x.lfp".into()), sounds, Some(Path::new("b.bin")), Path::new("out"), &[]);
         assert_eq!(args, [OsString::from("--menu"), "x.lfp".into(), "out".into()]);
     }
 

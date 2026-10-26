@@ -27,6 +27,17 @@ BIOS's ButtonMPI ([[gp+4] + 0x7C], GetButtonState at +4, as nativechip.py): some
 button events for themselves and the ActionScript listener of the HINT + A + B watcher never hears
 them (Cars, VERIFIED-EMU), so the flusher passes this on to the watcher (saveshim, ingame). (A
 second native of its own was never found by the player, in a resource of its own or not.)
+
+On some screens the game's scripts don't run at all (name-entry keyboards, videos: Cosmic Math,
+Sonic X, Schoolhouse Rock), so neither the prompt nor the flusher sees the keys. For those, __llEE
+also wraps ButtonMPI's poll (+8, run every 10 ms by the BIOS button task) as nativechip.py does:
+held for FALLBACK_POLLS (4 s, after the prompt's 2.5 s bar would have gone back already) the stub
+restarts into the menu. The button task must not touch files: while the game reads the card (Schoolhouse
+Rock's videos) a save written from it hung the console, and BT_StartSDMenu's own PlayGame.lnk write failed,
+so the console went to its home screen (VERIFIED-EMU). So the stub writes PlayGame.lnk (the menu's path,
+as BT_StartSDMenu does: 0x400F_16C8 path, 0x400F_1724 the .lnk's path, "w+") once at install, in the
+game's own context, and the fallback only calls LC_Boot("ExtStorage") (0x400F_0674), the restart that
+reads it. (Any other restart of the game still boots the console's home screen, which ignores the .lnk.)
 """
 import os
 import subprocess
@@ -37,6 +48,7 @@ NATIVE_NAME = "__llEE"
 KEYS_FLAG = 1 << 29
 # ButtonMPI GetButtonState word 0 = pressed buttons: A, B, HINT (as nativechip.COMBO)
 COMBO = 0x4000 | 0x2000 | 0x1000_0000
+FALLBACK_POLLS = 400  # HINT + A + B held 4 s (one poll per 10 ms) with nothing done: back to the menu
 QUIET = 10  # calls (one a frame) without changes before the save file is written
 SYSTEM_DEVICE = 0  # the console's own memory (flash-emulated); every other device is the cartridge chip
 
@@ -72,6 +84,7 @@ llee:
     mov     r0, 0
     bl      arg_int
     mov     r15, r0
+    bl      btn_install
     ld      r1, [gp, 4]
     ld      r2, [r1, 0x88]
     mov     r3, fake_table
@@ -98,6 +111,7 @@ llee:
     mov     r4, 1
     st      r4, [r5]
     bl      load
+    bl      menu_lnk
 1:
     ; changes since the last call: something to write, quiet calls counted from 0
     mov     r5, dirty_lo
@@ -309,6 +323,113 @@ persist:
     ld.ab   blink, [sp, 4]
     j       [blink]
 
+    .align  4
+; ---- ButtonMPI ([[gp+4]+0x7C]) copied with its poll (+8) wrapped, unless it is ours already
+btn_install:
+    ld      r1, [gp, 4]
+    ld      r2, [r1, 0x7c]
+    mov     r3, btn_table
+    breq    r2, r3, 9f
+    mov     r5, btn_orig
+    st      r2, [r5]
+    mov     r6, 16
+    mov     r7, r3
+    mov     r8, r2
+5:
+    ld      r4, [r8]
+    st      r4, [r7]
+    add     r7, r7, 4
+    add     r8, r8, 4
+    sub     r6, r6, 1
+    brne    r6, 0, 5b
+    mov     r4, btn_poll
+    st      r4, [r3, 8]
+    st      r3, [r1, 0x7c]
+9:
+    j_s     [blink]
+
+    .align  4
+; ---- the poll wrapper: the original, then count how long HINT + A + B are held
+btn_poll:
+    st.aw   blink, [sp, -4]
+    st.aw   r13, [sp, -4]
+    st.aw   r14, [sp, -4]
+    sub     sp, sp, 16
+    mov     r13, btn_orig
+    ld      r13, [r13]
+    ld      r1, [r13, 8]
+    jl      [r1]
+    mov     r14, r0
+    mov     r0, sp
+    ld      r1, [r13, 4]
+    jl      [r1]
+    ld      r2, [sp]
+    and     r2, r2, COMBO
+    mov     r3, btn_hold
+    ld      r4, [r3]
+    cmp     r2, COMBO
+    bne     1f
+    add     r4, r4, 1
+    b       2f
+1:
+    mov     r4, 0
+2:
+    st      r4, [r3]
+    cmp     r4, FALLBACK_POLLS
+    bne     3f
+    mov     r0, 0x400f78fc          ; "ExtStorage": restart into the PlayGame.lnk written at install
+    mov     r1, 0x400f0674
+    jl      [r1]
+3:
+    mov     r0, r14
+    add     sp, sp, 16
+    ld.ab   r14, [sp, 4]
+    ld.ab   r13, [sp, 4]
+    ld.ab   blink, [sp, 4]
+    j       [blink]
+
+    .align  4
+; ---- PlayGame.lnk = the menu's path, as BT_StartSDMenu (0x4002_2C8C) and 0x4002_2AA8 write it
+menu_lnk:
+    st.aw   blink, [sp, -4]
+    st.aw   r13, [sp, -4]
+    sub     sp, sp, 0x170           ; the menu's path at sp (0x68), the .lnk's at sp+0x68 (260)
+    mov     r0, sp
+    mov     r1, 0x64
+    mov     r2, 0x3c7fb3d0
+    mov     r3, 1
+    mov     r4, 0x400f792c
+    mov     r5, 0x400f16c8
+    jl      [r5]
+    add     r0, sp, 0x68
+    mov     r1, 260
+    mov     r2, 1
+    mov     r3, 0x400f1724
+    jl      [r3]
+    add     r0, sp, 0x68
+    mov     r1, 0x400f78f8          ; "w+"
+    mov     r2, FOPEN
+    jl      [r2]
+    mov     r13, r0
+    breq    r13, 0, 1f
+    mov     r0, sp
+    mov     r1, 0x400e839c          ; strlen
+    jl      [r1]
+    mov     r1, r0
+    mov     r0, sp
+    mov     r2, 1
+    mov     r3, r13
+    mov     r4, FWRITE
+    jl      [r4]
+    mov     r0, r13
+    mov     r1, FCLOSE
+    jl      [r1]
+1:
+    add     sp, sp, 0x170
+    ld.ab   r13, [sp, 4]
+    ld.ab   blink, [sp, 4]
+    j       [blink]
+
 ; ---- read(dev, addr, len, buf)
 fk_read:
     breq    r0, SYSTEM_DEVICE, 9f
@@ -455,6 +576,12 @@ dirty_hi:
     .word   0
 fake_table:
     .word   0, 0, 0, 0, 0, 0
+btn_orig:
+    .word   0                       ; the BIOS's ButtonMPI table
+btn_hold:
+    .word   0                       ; polls with HINT + A + B held
+btn_table:
+    .fill   64, 1, 0                ; our copy of it (16 words)
 loaded:
     .word   0                       ; the save file has been read
 pending:
@@ -482,7 +609,7 @@ def build(address, size=256, path="b:\\save.dat"):
         raise ValueError("chip size must be a power of two")
     src = (SOURCE.replace("SYSTEM_DEVICE", str(SYSTEM_DEVICE)).replace("COMBO", str(COMBO))
            .replace("KEYS_FLAG", str(KEYS_FLAG)).replace("MASK", str(size - 1)).replace("SIZE", str(size))
-           .replace("QUIET", str(QUIET)).replace("PATH", path.replace("\\", "\\\\")))
+           .replace("QUIET", str(QUIET)).replace("FALLBACK_POLLS", str(FALLBACK_POLLS)).replace("PATH", path.replace("\\", "\\\\")))
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}.exe")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("stub.s", "stub.o", "stub.elf", "stub.bin"))

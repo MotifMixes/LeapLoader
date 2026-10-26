@@ -300,11 +300,11 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "ribbit-audio"
-version = "1.5.1"
+version = "1.6.0"
 
 [[package]]
 name = "ribbit-core"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "bincode",
  "crc32fast",
@@ -324,7 +324,7 @@ dependencies = [
 
 [[package]]
 name = "ribbit-cpu"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "ribbit-memory",
  "serde",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "ribbit-debug"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "tracing",
  "tracing-subscriber",
@@ -341,14 +341,14 @@ dependencies = [
 
 [[package]]
 name = "ribbit-input"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "ribbit-jit"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "dynasm",
  "dynasmrt",
@@ -360,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "ribbit-memory"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "crc32fast",
  "serde",
@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "ribbit-video"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "serde",
 ]

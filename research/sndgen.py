@@ -48,7 +48,9 @@ def load_pcm(path, peak=0.9):
 
 def load_alaw(path, peak=0.9):
     """Any audio file -> 8 kHz mono G.711 A-law bytes (ffmpeg resamples and encodes), normalised
-    to `peak` of full scale."""
+    to `peak` of full scale. A .alaw file is already that (assets/welcome.alaw: no ffmpeg needed)."""
+    if path.lower().endswith(".alaw"):
+        return open(path, "rb").read()
     raw = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-ac", "1", "-ar", str(ALAW_RATE), "-f", "s16le", "-"],
                          capture_output=True, check=True).stdout
     s = struct.unpack(f"<{len(raw) // 2}h", raw)

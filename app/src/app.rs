@@ -49,8 +49,9 @@ pub struct App {
     /// every frame: they are files to find).
     research: Option<PathBuf>,
     nativescan: Option<PathBuf>,
+    bios: Option<PathBuf>,
     /// The settings they were found for.
-    tools_for: Option<(Option<PathBuf>, Option<PathBuf>)>,
+    tools_for: Option<(Option<PathBuf>, Option<PathBuf>, Option<PathBuf>)>,
     /// LeapFrog's SD menu in the output folder, if it has one.
     menu_on_card: Option<PathBuf>,
     /// The last look for a Leapster 2 on USB (usb.rs): its disks, and the
@@ -130,6 +131,7 @@ impl App {
             usb_built: None,
             research: None,
             nativescan: None,
+            bios: None,
             tools_for: None,
             gpu: None,
             egui_state: None,
@@ -166,10 +168,11 @@ impl App {
 
     /// Finds mkcard's folder and nativescan again if their settings changed.
     fn find_tools(&mut self) {
-        let key = (self.settings.research.clone(), self.settings.nativescan.clone());
+        let key = (self.settings.research.clone(), self.settings.nativescan.clone(), self.settings.bios.clone());
         if self.tools_for.as_ref() != Some(&key) {
             self.research = card::research_dir(&self.settings);
             self.nativescan = card::default_nativescan(&self.settings);
+            self.bios = card::find_bios(&self.settings);
             self.tools_for = Some(key);
         }
     }
@@ -239,6 +242,7 @@ impl App {
             },
             Pick::Research => card::research_dir(&self.settings),
             Pick::Nativescan => card::default_nativescan(&self.settings),
+            Pick::Bios => card::find_bios(&self.settings),
         };
         if self.sheet.is_none()
             && let Some(g) = &self.gpu
@@ -280,6 +284,7 @@ impl App {
                 }
             }
             Pick::Nativescan => self.settings.nativescan = Some(first),
+            Pick::Bios => self.settings.bios = Some(first),
         }
         self.save_settings();
     }
@@ -548,6 +553,7 @@ impl App {
             last_build: self.last_build.as_ref(),
             research: self.research.clone(),
             nativescan: self.nativescan.clone(),
+            bios: self.bios.clone(),
             menu_on_card: self.menu_on_card.as_deref(),
             ribbit_folders: &self.ribbit_folders,
             usb: self.usb.as_ref(),

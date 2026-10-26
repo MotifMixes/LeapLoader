@@ -7,7 +7,13 @@ hardware.** "Saving works" below means the save path is in place and the save fi
 a full save → power off → load test has not been done for any game.
 How the save kinds, HINT + A + B and big images work: [how-it-works.md](how-it-works.md).
 
-Totals: **77 Leapster dumps (39 + 38 downloaded 2026-10-25): 77 convert, 77 run**. `disprin`/`prinfrog`
+Totals: **77 Leapster dumps (39 + 38 downloaded 2026-10-25): 77 convert, 77 run, 77 go back with HINT + A + B**
+(2026-10-26 regression `D:\leaploader-tmp
+ative\g8`, 74 of them twice in a row; no BIOS assert in any run).
+**Correction 2026-10-26:** Cosmic Math, Letterpillar, Number Raiders and Word Chasers did NOT run before
+2026-10-26: they asserted at their first sound (unrelocated 0x100D handle lists, how-it-works 5) and the
+"name entry" seen in their screenshots was the console's own. They now reach gameplay. Save kinds below
+are from before 2026-10-25: every game now gets the RAM chip (`save.dat`) unless it has no room (native chip, `save.bin`). `disprin`/`prinfrog`
 are LeapPad dumps, not Leapster. Penguins of Madagascar runs since the user's new dump (2026-10-25; the old one had bit errors).
 
 Names: the menu shows the box names from `research/gamenames.py` (by dump CRC-32), e.g. `letrfactry.bin`

@@ -73,6 +73,8 @@ pub struct Info<'a> {
     pub last_build: Option<&'a (bool, String)>,
     pub research: Option<PathBuf>,
     pub nativescan: Option<PathBuf>,
+    /// The Leapster 2 BIOS for the menu music (None: no music).
+    pub bios: Option<PathBuf>,
     /// LeapFrog's SD menu found in the output folder.
     pub menu_on_card: Option<&'a std::path::Path>,
     /// The Ribbit emulator's games folders (empty: Ribbit isn't installed).
@@ -709,7 +711,7 @@ fn colored_button(
 
 /// A section heading, as Ribbit's side menu's.
 fn section(ui: &mut egui::Ui, title: &str) {
-    ui.add_space(14.0);
+    ui.add_space(10.0);
     // (Ribbit's grey, tinted with the mark's purple.)
     ui.label(
         egui::RichText::new(title.to_uppercase()).size(12.5).color(egui::Color32::from_rgb(150, 140, 196)).strong(),
@@ -721,7 +723,7 @@ fn section(ui: &mut egui::Ui, title: &str) {
 /// Build button with its progress, and the (coming) Leapster 2 over USB.
 fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: &mut Vec<Action>) {
     ui.label(egui::RichText::new("Card").size(26.0).family(crate::fonts::title()).color(PURPLE_LIGHT));
-    ui.add_space(6.0);
+    ui.add_space(2.0);
     leapster2_notice(ui);
     ui.add_enabled_ui(!info.building, |ui| {
         section(ui, "Menu");
@@ -742,7 +744,18 @@ fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: 
         }
         // LeapFrog's menu isn't LeapLoader's to hand out: it comes from the
         // user's own .lfp package, or from the card if it has it already.
-        let theirs = ui.radio(leapfrog, "LeapFrog's SD menu");
+        let (theirs, import) = ui
+            .horizontal(|ui| {
+                let theirs = ui.radio(leapfrog, "LeapFrog's SD menu");
+                let import = ui.small_button("Import .lfp…").on_hover_text(
+                    "LeapFrog's SD menu package, from your own console (e.g. LSTR-0x00130001-000000.lfp)",
+                );
+                (theirs, import)
+            })
+            .inner;
+        if import.clicked() {
+            actions.push(Action::Pick(Pick::LeapFrogMenu));
+        }
         let hover = "LeapFrog's own menu: 6 games a page, no music";
         if theirs.on_hover_text(hover).clicked() && !leapfrog {
             if info.menu_on_card.is_some() {
@@ -755,39 +768,23 @@ fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: 
         let note = |ui: &mut egui::Ui, text: &str| {
             ui.add(egui::Label::new(egui::RichText::new(text).size(13.0).color(egui::Color32::from_gray(150))).wrap());
         };
-        ui.indent("leapfrog menu", |ui| {
-            match &settings.menu {
-                Menu::LeapFrog(p) => {
-                    let name = p.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-                    note(ui, &format!("From {name}"));
-                }
-                Menu::LeapFrogOnCard => note(ui, "The one already in the output folder"),
-                Menu::LeapLoader if info.menu_on_card.is_some() => {
-                    note(ui, "The output folder has it already");
-                }
-                Menu::LeapLoader => note(ui, "Import it from your own .lfp package (e.g. LSTR-0x00130001-000000.lfp)"),
+        ui.indent("leapfrog menu", |ui| match &settings.menu {
+            Menu::LeapFrog(p) => {
+                let name = p.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+                note(ui, &format!("From {name}"));
             }
-            if ui.small_button("Import .lfp…").on_hover_text("LeapFrog's SD menu package").clicked() {
-                actions.push(Action::Pick(Pick::LeapFrogMenu));
-            }
+            Menu::LeapFrogOnCard => note(ui, "The one already in the output folder"),
+            Menu::LeapLoader if info.menu_on_card.is_some() => note(ui, "The output folder has it already"),
+            Menu::LeapLoader => {}
         });
         section(ui, "Output folder");
-        ui.add(
-            egui::Label::new(
-                egui::RichText::new(
-                    "The card's files are built into this folder; copy them to the root of the SD card.",
-                )
-                .size(13.0)
-                .color(egui::Color32::from_gray(150)),
-            )
-            .wrap(),
-        );
-        ui.add_space(4.0);
         ui.horizontal(|ui| {
             let text = settings.output.as_ref().map_or_else(|| "Choose…".to_string(), |p| p.display().to_string());
             let width = ui.available_width() - if settings.output.is_some() { 40.0 } else { 0.0 };
             let b = egui::Button::new(text).truncate().corner_radius(8).min_size(egui::vec2(width, 30.0));
-            if ui.add_sized([width, 30.0], b).clicked() {
+            let hover = "The card's files are built into this folder: the SD card's drive, or any folder (then copy \
+                         its files to the root of the SD card)";
+            if ui.add_sized([width, 30.0], b).on_hover_text(hover).clicked() {
                 actions.push(Action::Pick(Pick::Output));
             }
             if let Some(out) = &settings.output {
@@ -813,7 +810,7 @@ fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: 
                 .on_hover_text("The room the card's files take: about the size of the dumps, plus the menu");
         });
     });
-    ui.add_space(16.0);
+    ui.add_space(8.0);
     let ready = !chosen.is_empty() && settings.output.is_some() && info.research.is_some();
     if info.building {
         build_progress(ui, info);
@@ -848,6 +845,8 @@ fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: 
             ui.label(egui::RichText::new(why).size(13.0).color(egui::Color32::from_gray(150)));
         }
     }
+    ui.add_space(4.0);
+    ui.add(egui::Label::new(egui::RichText::new(HARDWARE_WARNING).size(12.0).color(SKIP_RED)).wrap());
     usb_section(ui, info, actions);
 }
 
@@ -872,26 +871,38 @@ fn build_progress(ui: &mut egui::Ui, info: &Info) {
 }
 
 /// LeapLoader's cards are for the Leapster 2 only.
+/// The disclaimer (user's request): nothing has been tried on a real
+/// console yet, only in the Ribbit emulator.
+const HARDWARE_WARNING: &str = "⚠ Not yet tested on a real Leapster 2, only in the Ribbit emulator. Use at your \
+                                own risk, and copy your SD card's files somewhere first.";
+
 fn leapster2_notice(ui: &mut egui::Ui) {
     egui::Frame::NONE
         .fill(PURPLE.gamma_multiply(0.18))
         .stroke(egui::Stroke::new(1.0, PURPLE.gamma_multiply(0.6)))
         .corner_radius(10)
-        .inner_margin(egui::Margin::symmetric(12, 9))
+        .inner_margin(egui::Margin::symmetric(10, 6))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.label(egui::RichText::new("You need a Leapster 2").size(15.0).strong().color(egui::Color32::WHITE));
-            ui.add(
-                egui::Label::new(
-                    egui::RichText::new(
-                        "The card boots from the Leapster 2's SD icon. The first Leapster (Leapster 1, Leapster \
-                         L-MAX) has no SD card and can't use it.",
-                    )
-                    .size(13.0)
-                    .color(egui::Color32::from_gray(205)),
-                )
-                .wrap(),
-            );
+            let grey = egui::TextFormat {
+                font_id: egui::FontId::proportional(12.5),
+                color: egui::Color32::from_gray(205),
+                ..Default::default()
+            };
+            let white = egui::TextFormat { color: egui::Color32::WHITE, ..grey.clone() };
+            // Which console (the first Leapster and the L-MAX have no SD card),
+            let mut job = egui::text::LayoutJob::default();
+            job.append("For the ", 0.0, grey.clone());
+            job.append("Leapster 2", 0.0, white.clone());
+            job.append(" only (the Leapster 1 and L-MAX have no SD card).", 0.0, grey.clone());
+            ui.add(egui::Label::new(job).wrap());
+            // and how to get back to the menu from a game (research/ingame.py):
+            // the one thing on the console a player has to know.
+            let mut back = egui::text::LayoutJob::default();
+            back.append("In a game, hold ", 0.0, grey.clone());
+            back.append("HINT + A + B", 0.0, white);
+            back.append(" to save and go back to the menu.", 0.0, grey);
+            ui.add(egui::Label::new(back).wrap());
         });
 }
 
@@ -899,12 +910,12 @@ fn leapster2_notice(ui: &mut egui::Ui) {
 /// find it, open its SD card, build the card onto it, eject it. Each step
 /// that changes something is asked first (`dialogs`).
 fn usb_section(ui: &mut egui::Ui, info: &Info, actions: &mut Vec<Action>) {
-    ui.add_space(22.0);
+    ui.add_space(12.0);
     egui::Frame::new()
         .fill(CARD)
         .stroke(egui::Stroke::new(1.0, egui::Color32::from_white_alpha(14)))
         .corner_radius(10)
-        .inner_margin(egui::Margin::symmetric(14, 12))
+        .inner_margin(egui::Margin::symmetric(12, 9))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
@@ -918,8 +929,7 @@ fn usb_section(ui: &mut egui::Ui, info: &Info, actions: &mut Vec<Action>) {
             let grey = egui::Color32::from_gray(170);
             note(
                 ui,
-                "Plug your Leapster 2 into this PC with its USB cable and turn it on, then send the games straight to \
-                 its SD card.",
+                "Plug in your Leapster 2 with its USB cable, turn it on, and build straight onto its SD card.",
                 grey,
             );
             ui.add_space(6.0);
@@ -1051,6 +1061,21 @@ fn usb_question(step: &UsbStep, info: &Info) -> (String, String, &'static str) {
 }
 
 fn dialogs(ctx: &egui::Context, st: &mut UiState, settings: &mut Settings, info: &Info, actions: &mut Vec<Action>) {
+    // First start: the AI note and the hardware warning as a pop-up, read
+    // once (Ribbit's first-start note).
+    if !settings.ai_notice_seen {
+        egui::Modal::new(egui::Id::new("ai-notice")).frame(card_frame()).show(ctx, |ui| {
+            ui.set_width(ctx.content_rect().width().min(560.0) - 80.0);
+            ai_notice_text(ui);
+            ui.add_space(16.0);
+            ui.vertical_centered(|ui| {
+                if primary_button(ui, "Continue", egui::vec2(220.0, 44.0)).clicked() {
+                    settings.ai_notice_seen = true;
+                    actions.push(Action::SettingsChanged);
+                }
+            });
+        });
+    }
     if let Some(step) = st.confirm_usb.clone() {
         let (title, text, yes) = usb_question(&step, info);
         egui::Modal::new(egui::Id::new("confirm usb")).frame(card_frame()).show(ctx, |ui| {
@@ -1148,6 +1173,27 @@ fn dialogs(ctx: &egui::Context, st: &mut UiState, settings: &mut Settings, info:
                 }
             });
             ui.end_row();
+            ui.label("Leapster 2 BIOS");
+            ui.horizontal(|ui| {
+                let found =
+                    info.bios.as_ref().map_or_else(|| "(none: no menu music)".into(), |p| p.display().to_string());
+                if ui
+                    .button(found)
+                    .on_hover_text(
+                        "Your Leapster 2 BIOS 0.6 dump: LeapLoader's menu music is played with its instruments",
+                    )
+                    .clicked()
+                {
+                    actions.push(Action::Pick(Pick::Bios));
+                }
+                if settings.bios.is_some()
+                    && ui.small_button("×").on_hover_text("Use the one picked in Ribbit").clicked()
+                {
+                    settings.bios = None;
+                    actions.push(Action::SettingsChanged);
+                }
+            });
+            ui.end_row();
         });
     });
     st.show_settings = open;
@@ -1163,6 +1209,8 @@ fn dialogs(ctx: &egui::Context, st: &mut UiState, settings: &mut Settings, info:
         ui.add_space(6.0);
         ui.label("Puts your own Leapster cartridge dumps on an SD card for the Leapster 2.");
         ui.add_space(4.0);
+        ui.add(egui::Label::new(egui::RichText::new(HARDWARE_WARNING).color(SKIP_RED)).wrap());
+        ui.add_space(4.0);
         ui.label("LeapLoader is free software under the GNU GPL v3 or later.");
         ui.label(
             egui::RichText::new(
@@ -1176,6 +1224,48 @@ fn dialogs(ctx: &egui::Context, st: &mut UiState, settings: &mut Settings, info:
         ui.label(egui::RichText::new("LeapLoader is not affiliated with or endorsed by LeapFrog.").size(12.5).weak());
     });
     st.show_about = open;
+}
+
+/// The README's "This project was made with AI", shortened (as Ribbit's
+/// first-start note), and that nothing has been tried on a real console.
+fn ai_notice_text(ui: &mut egui::Ui) {
+    ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
+        ui.label(egui::RichText::new("This project was made with AI").size(21.0).strong().color(egui::Color32::WHITE));
+        ui.add_space(2.0);
+        ui.label(egui::RichText::new("Please read this before you start").size(13.5).color(ACCENT));
+        ui.add_space(12.0);
+        for text in [
+            "LeapLoader is written almost entirely by an AI coding assistant (Anthropic's Claude), working under my \
+             direction: I choose what to work on, test it, supply the hardware references and decide what goes in.",
+            "Many people don't want to use AI-written software, for reasons I respect: licensing and where training \
+             data comes from, code quality, and the work of people who reverse-engineer hardware by hand. If that's \
+             you, no hard feelings.",
+            "Otherwise, please judge LeapLoader by its results: every hardware claim in its notes says how sure it \
+             is and where it comes from.",
+        ] {
+            ui.add(egui::Label::new(egui::RichText::new(text).size(15.0).color(egui::Color32::from_gray(205))).wrap());
+            ui.add_space(9.0);
+        }
+        ui.label(egui::RichText::new("Use at your own risk").size(16.0).strong().color(SKIP_RED));
+        ui.add_space(2.0);
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(
+                    "LeapLoader has not been tested on a real Leapster 2 yet, only in the Ribbit emulator. Copy your \
+                     SD card's files somewhere before you put LeapLoader's files on it.",
+                )
+                .size(15.0)
+                .color(SKIP_RED),
+            )
+            .wrap(),
+        );
+        ui.add_space(11.0);
+        ui.label(
+            egui::RichText::new("LeapLoader is not affiliated with or endorsed by LeapFrog.")
+                .size(12.5)
+                .color(egui::Color32::from_gray(130)),
+        );
+    });
 }
 
 /// Ribbit's dialog card: dark, rounded, with a soft green edge.

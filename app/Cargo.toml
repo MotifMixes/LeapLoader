@@ -62,3 +62,7 @@ epaint_default_fonts = "0.36.2"
 [profile.release]
 # A small app: no fat LTO (Ribbit's needs it for the emulator's hot loop).
 codegen-units = 16
+
+[lints.rust]
+# Set by scripts/package-release.py for release packages (card::research_dir).
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(leaploader_release)"] }

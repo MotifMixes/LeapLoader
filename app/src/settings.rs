@@ -40,8 +40,13 @@ pub struct Settings {
     /// nativescan, the converter's helper (the NATIVESCAN variable); None:
     /// `card::default_nativescan`.
     pub nativescan: Option<PathBuf>,
+    /// The Leapster 2 BIOS 0.6 dump the menu music is rendered with; None:
+    /// the one Ribbit uses (`card::find_bios`).
+    pub bios: Option<PathBuf>,
     /// The build log panel is open.
     pub show_log: bool,
+    /// The first-start note (made with AI, use at your own risk) was read.
+    pub ai_notice_seen: bool,
 }
 
 impl Default for Settings {
@@ -56,7 +61,9 @@ impl Default for Settings {
             research: None,
             python: if cfg!(windows) { "python" } else { "python3" }.into(),
             nativescan: None,
+            bios: None,
             show_log: true,
+            ai_notice_seen: false,
         }
     }
 }

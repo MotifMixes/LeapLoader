@@ -1,14 +1,17 @@
 """Prototype (research): builds the files for a LeapLoader SD card from cartridge dumps.
 
 Usage: python mkcard.py [--menu leaploader|MENU.lfp|SDMenu.bin] [--music SONG.mid] [--music-loop SECONDS]
-                        [--console drums,PROGRAM,...]
-                        [--welcome SOUND|none]
+                        [--console drums,PROGRAM,...] [--short PROGRAM,...] [--floor PROGRAM:VELOCITY,...]
+                        [--welcome SOUND|none] [--bios LEAPSTER2_BIOS.bin]
                         OUT_DIR DUMP.bin|FOLDER [...]
-(--welcome: the sound LeapLoader's menu plays when it starts; default assets/welcome.mp3)
+(--welcome: the sound LeapLoader's menu plays when it starts; default assets/welcome.alaw, made from welcome.mp3)
 (--music: background music for LeapLoader's menu: a MIDI file whose track names are BIOS program
  numbers, rendered with the BIOS's instruments into a looping clip, musicrender.py; --music-loop: where
  the music starts again after its end, e.g. 20.21; default 0; --console: tracks the console's own
- sequencer plays instead of the clip, by BIOS program number, "drums" = the drum tracks; default drums)
+ sequencer plays instead of the clip, by BIOS program number, "drums" = the drum tracks; default drums;
+ --short: tracks whose notes play their sample once, without looping it; --floor: a track's softer notes
+ play at that velocity)
+(--bios: the Leapster 2 BIOS 0.6 dump whose instruments render the music; without it the menu has no music)
 (folders: every .bin in them)
 
 OUT_DIR receives, ready to copy to the root of the card:
@@ -29,6 +32,7 @@ import os
 import re
 import struct
 import sys
+import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gamenames  # noqa: E402
@@ -115,7 +119,21 @@ def console_programs(music, spec):
     return out
 
 
-def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loop=0.0, console="drums"):
+# The BIOS the music is rendered with: 0.6, the version musicrender's addresses are for.
+BIOS_06_CRC = 0xFA94D9A7
+
+
+def music_bios_problem(bios):
+    """Why `bios` can't render the menu music, or None if it can."""
+    if not bios or not os.path.isfile(bios):
+        return "no Leapster 2 BIOS given (--bios)"
+    if zlib.crc32(open(bios, "rb").read()) != BIOS_06_CRC:
+        return f"{os.path.basename(bios)} is not the Leapster 2 BIOS 0.6 (152-12206)"
+    return None
+
+
+def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loop=0.0, console="drums", short="",
+          floor="", bios=None):
     games, used, approval = [], {"leaploader"}, None  # (LeapLoader\home.txt: menugen.HOME_PATH)
     menu_name = "LeapLoader" if menu == "leaploader" else "SD Menu"  # named by the HINT + A + B prompt
     for path in dumps:
@@ -173,10 +191,24 @@ def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loo
     if menu == "leaploader":
         seq = None
         if music:
-            import musicrender
+            try:
+                import musicrender
+            except ImportError as e:  # numpy and scipy render the music
+                missing = (e.name or "numpy").split(".")[0]
+                musicrender, problem = None, f"Python is missing {missing} (pip install numpy scipy)"
+            if musicrender:
+                bios = bios or musicrender.DEFAULT_BIOS
+                problem = music_bios_problem(bios)
+            if problem:
+                print(f"note  menu without music: {problem}")
+                music = None
+        if music:
             info = {}
-            seq = musicrender.render(music, report=info, loop_start=music_loop,
-                                     console_programs=console_programs(music, console))
+            seq = musicrender.render(music, bios_path=bios, report=info, loop_start=music_loop,
+                                     console_programs=console_programs(music, console),
+                                     short_programs={int(p) for p in short.split(",") if p.strip()},
+                                     velocity_floor={int(p.split(":")[0]): int(p.split(":")[1])
+                                                     for p in floor.split(",") if p.strip()})
             print(f"music {os.path.basename(music)}: {info['seconds']:.1f} s, loops from {music_loop:.3f} s,"
                   f" {info['notes']} notes rendered"
                   f" with the BIOS's instruments, {len(seq) // 1024} KiB"
@@ -206,15 +238,22 @@ def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loo
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    menu, music, music_loop, console = "leaploader", None, 0.0, "drums"
-    welcome = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "welcome.mp3")
-    while args[:1] in (["--menu"], ["--music"], ["--music-loop"], ["--welcome"], ["--console"]):
+    menu, music, music_loop, console, short, floor, bios = "leaploader", None, 0.0, "drums", "", "", None
+    welcome = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "welcome.alaw")
+    while args[:1] in (["--menu"], ["--music"], ["--music-loop"], ["--welcome"], ["--console"], ["--short"], ["--floor"],
+                       ["--bios"]):
         if args[0] == "--menu":
             menu = args[1]
         elif args[0] == "--music-loop":
             music_loop = float(args[1])
         elif args[0] == "--console":
             console = args[1]
+        elif args[0] == "--short":
+            short = args[1]
+        elif args[0] == "--floor":
+            floor = args[1]
+        elif args[0] == "--bios":
+            bios = args[1]
         elif args[0] == "--welcome":
             welcome = None if args[1] == "none" else args[1]
         else:
@@ -226,4 +265,5 @@ if __name__ == "__main__":
             paths += sorted(os.path.join(a, f) for f in os.listdir(a) if f.lower().endswith(".bin"))
         else:
             paths.append(a)
-    build(args[0], paths, menu, music, welcome if welcome and os.path.exists(welcome) else None, music_loop, console)
+    build(args[0], paths, menu, music, welcome if welcome and os.path.exists(welcome) else None, music_loop, console,
+          short, floor, bios)

@@ -18,6 +18,8 @@ pub enum Pick {
     /// LeapLoader's research folder (with mkcard.py).
     Research,
     Nativescan,
+    /// The Leapster 2 BIOS 0.6 dump (the menu music's instruments).
+    Bios,
 }
 
 impl Pick {
@@ -29,6 +31,7 @@ impl Pick {
             Pick::LeapFrogMenu => "Choose LeapFrog's SD menu (.lfp package or SDMenu.bin)",
             Pick::Research => "Choose LeapLoader's research folder (with mkcard.py)",
             Pick::Nativescan => "Choose nativescan",
+            Pick::Bios => "Choose your Leapster 2 BIOS 0.6 dump (152-12206)",
         }
     }
 
@@ -39,6 +42,7 @@ impl Pick {
     fn filters(self) -> &'static [(&'static str, &'static [&'static str])] {
         match self {
             Pick::Dumps => &[("Leapster dumps", &["bin", "zip"])],
+            Pick::Bios => &[("BIOS dumps", &["bin"])],
             Pick::LeapFrogMenu => &[("LeapFrog SD menu", &["lfp", "bin"])],
             // (A program has no extension outside Windows: "All files".)
             Pick::Nativescan if cfg!(windows) => &[("Programs", &["exe"])],

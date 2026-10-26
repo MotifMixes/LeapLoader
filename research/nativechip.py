@@ -138,6 +138,7 @@ install:
     mov     r4, btn_poll
     st      r4, [r3, 8]
     st      r3, [r1, 0x7c]
+    bl      menu_lnk
 9:
     ld.ab   r14, [sp, 4]
     ld.ab   r13, [sp, 4]
@@ -183,10 +184,23 @@ btn_poll:
     ld.ab   blink, [sp, 4]
     j       [blink]
 
-; ---- back to the SD menu, as BT_StartSDMenu (0x4002_2C8C) does: path, then PlayGame.lnk + restart
+; ---- back to the SD menu: LC_Boot("ExtStorage") (0x400F_0674) restarts into the PlayGame.lnk that
+; menu_lnk wrote at install. No file is touched here, in the button task (eestub.py: while the game
+; reads the card, BT_StartSDMenu's own .lnk write from this task failed and the console went home).
 go_menu:
     st.aw   blink, [sp, -4]
-    sub     sp, sp, 0x68
+    mov     r0, 0x400f78fc
+    mov     r1, 0x400f0674
+    jl      [r1]
+    ld.ab   blink, [sp, 4]
+    j       [blink]
+
+    .align  4
+; ---- PlayGame.lnk = the menu's path, as BT_StartSDMenu (0x4002_2C8C) and 0x4002_2AA8 write it
+menu_lnk:
+    st.aw   blink, [sp, -4]
+    st.aw   r13, [sp, -4]
+    sub     sp, sp, 0x170
     mov     r0, sp
     mov     r1, 0x64
     mov     r2, 0x3c7fb3d0
@@ -194,13 +208,36 @@ go_menu:
     mov     r4, 0x400f792c
     mov     r5, 0x400f16c8
     jl      [r5]
+    add     r0, sp, 0x68
+    mov     r1, 260
+    mov     r2, 1
+    mov     r3, 0x400f1724
+    jl      [r3]
+    add     r0, sp, 0x68
+    mov     r1, 0x400f78f8
+    mov     r2, FOPEN
+    jl      [r2]
+    mov     r13, r0
+    breq    r13, 0, 1f
     mov     r0, sp
-    mov     r1, 0x40022aa8
+    mov     r1, 0x400e839c
     jl      [r1]
-    add     sp, sp, 0x68
+    mov     r1, r0
+    mov     r0, sp
+    mov     r2, 1
+    mov     r3, r13
+    mov     r4, FWRITE
+    jl      [r4]
+    mov     r0, r13
+    mov     r1, FCLOSE
+    jl      [r1]
+1:
+    add     sp, sp, 0x170
+    ld.ab   r13, [sp, 4]
     ld.ab   blink, [sp, 4]
     j       [blink]
 
+    .align  4
 ; ---- write the whole chip to the card file
 persist:
     st.aw   blink, [sp, -4]

@@ -599,18 +599,20 @@ mode_w:
     .asciz  "w"
     .align  4
 mem:
-    .fill   SIZE, 1, 0xff
+    .fill   SIZE, 1, CHIPFILL
 """
 
 
-def build(address, size=256, path="b:\\save.dat"):
+def build(address, size=256, path="b:\\save.dat", fill=0xFF):
     """The stub assembled for `address` (a word-aligned RAM address in the SD image) with a
-    `size`-byte chip kept in the file `path` (a BIOS path: b:\\Leapster\\Apps\\<game>\\save.dat)."""
+    `size`-byte chip kept in the file `path` (a BIOS path: b:\\Leapster\\Apps\\<game>\\save.dat),
+    starting as `fill` before a save is read (0xFF: an erased chip; 0 for the games that came from
+    the native chip, which starts zeroed: Pet Pals shows junk names from an erased one)."""
     if size & (size - 1) or not 32 <= size <= 0x10000:
         raise ValueError("chip size must be a power of two")
     src = (SOURCE.replace("SYSTEM_DEVICE", str(SYSTEM_DEVICE)).replace("COMBO", str(COMBO))
            .replace("KEYS_FLAG", str(KEYS_FLAG)).replace("MASK", str(size - 1)).replace("SIZE", str(size))
-           .replace("QUIET", str(QUIET)).replace("FALLBACK_POLLS", str(FALLBACK_POLLS)).replace("PATH", path.replace("\\", "\\\\")))
+           .replace("QUIET", str(QUIET)).replace("FALLBACK_POLLS", str(FALLBACK_POLLS)).replace("CHIPFILL", str(fill)).replace("PATH", path.replace("\\", "\\\\")))
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("stub.s", "stub.o", "stub.elf", "stub.bin"))

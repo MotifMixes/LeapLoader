@@ -233,9 +233,25 @@ writing were ActionScript (slow: Cars' 2 KB chip took ~10 s to write). A Flash-o
 0x1009 list gets a copy of the resource directory with a 0x1009 entry (header 0x140 repointed).
 VERIFIED-EMU: load (marker bytes) and write-back in Cars and 1st Grade.
 
+### 4b'. Full images: room made by moving the sound clips to the card (2026-10-26)
+Some 8 MiB images have no room at all for the main-movie copy: SpongeBob Saves the Day (USA) and
+Lernen mit Leap (Germany) end exactly at 8 MiB, so until 2026-10-26 they got no saves and no
+HINT + A + B. Now `sdpack.convert` tries again with `make_room`: `bigimage.plan_room` cuts the
+LF_PlayLFC sound clips (table 4, ~1,100 clips, 1.6-2 MiB) out to `s.bin`, played through a 256 KiB
+ring at the top of the load area (the Story Explorers mechanism, section 6.4: `LL_PlayLFC`). No
+movie moves: moving movies (`plan`'s lfh mode) left SpongeBob USA on a black screen after its intro
+(one movie is loaded some way other than `lfh`), and each moved movie needs a RAM slot its own size.
+Native games that run out of room take this way before the native chip (4c), with the chip starting
+**zeroed** like the native chip's (`eestub.build(fill=0)`: Pet Pals shows junk names from an erased
+chip). VERIFIED-EMU (2026-10-26): the 22 games that ran out of room (20 had used the native chip)
+all save and go back with HINT + A + B twice; SpongeBob USA plays its clips from `s.bin`, Lernen mit
+Leap reaches its activities, Pet Pals starts with an empty name. The native chip is left for games
+whose clips don't free enough (WALL-E and its prototype).
+
 ### 4c. Native games without room: the native chip (`research/nativechip.py`, new 2026-10-25)
 4a and 4b need a copy of the main movie (the injected ActionScript makes it longer, so it must move),
-often 100+ KB. Ten 8 MiB games have no space for that. The native chip needs only ~1-2 KB:
+often 100+ KB. Ten 8 MiB games have no space for that. The native chip needs only ~1-2 KB (since
+2026-10-26 only when moving the sound clips doesn't make room, 4b'):
 * every function pointer in the game's 0x1009 native lists is pointed at an 8-byte trampoline
   (`mov r12, k; b common`); the first call of any native installs the chip, then every call jumps
   to the original function. ActionScript enters native code only through these natives, so the

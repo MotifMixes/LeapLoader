@@ -13,7 +13,9 @@ Under **Menu**, choose the menu the Leapster 2's SD icon opens:
 | **LeapLoader (Recommended)** | LeapLoader's own menu: the games' box names, 4 to a page, search, music. See [On the Leapster 2](05-on-the-leapster-2.md#leaploaders-menu) |
 | **LeapFrog's SD menu** | LeapFrog's own menu: 6 game buttons a page, no music, no search |
 
-LeapFrog's menu is not included with LeapLoader. To use it, click **Import .lfp…** and choose your own LeapFrog package for it (for example `LSTR-0x00130001-000000.lfp`). If the output folder already holds LeapFrog's menu from an earlier card, LeapLoader can use that one.
+LeapLoader's menu needs your **Leapster 2 BIOS 0.6** dump (152-12206): it plays its music with the BIOS's instruments, and LeapLoader includes none. If you use the Ribbit emulator, LeapLoader finds the BIOS picked there. If it finds none, the panel says "Choose your Leapster 2 BIOS 0.6 dump first: LeapLoader's menu plays its music with the BIOS's instruments (none are included)." Click **Choose your Leapster 2 BIOS…** under it and pick the file; until then **Build card** can't be clicked. See [Settings](07-settings.md#leapster-2-bios).
+
+LeapFrog's SD menu has no music and needs no BIOS. It is not included with LeapLoader either. To use it, click **Import .lfp…** and choose your own LeapFrog package for it (for example `LSTR-0x00130001-000000.lfp`). If the output folder already holds LeapFrog's menu from an earlier card, LeapLoader can use that one.
 
 HINT + A + B goes back to whichever menu is on the card.
 
@@ -21,10 +23,10 @@ HINT + A + B goes back to whichever menu is on the card.
 
 Under **Output folder**, click **Choose…** and pick where the card is built:
 
-- **the SD card's drive** (with the card in the PC's card reader): the card is ready when the build ends; or
+- **the SD card's drive** (with the card in the computer's card reader): the card is ready when the build ends; or
 - **any folder**: then copy what is in it (the `Leapster` folder) to the root of the SD card.
 
-The **📂** button (**Show the folder**) opens the folder in File Explorer.
+The **📂** button (**Show the folder**) opens the folder in File Explorer (or your system's file manager, or Finder).
 
 LeapLoader writes only its `Leapster` folder there. It adds its games and menu and replaces the ones it built before; other files are left alone. It never formats the card.
 
@@ -36,7 +38,9 @@ If the folder holds other files (an SD card usually does), LeapLoader asks befor
 
 **On the card** shows how many games are switched on and about how much room they take (about the size of the dumps, plus the menu).
 
-Click **Build card (N games)**. If the button can't be clicked, the words under it say why (no games yet, none chosen, no output folder, or the research folder wasn't found).
+Click **Build card (N games)**. If the button can't be clicked, the words under it say why (no games yet, none chosen, no output folder, the research folder wasn't found, or no Leapster 2 BIOS for LeapLoader's menu yet).
+
+The red line under the button repeats the warning: "⚠ Not yet tested on a real Leapster 2, only in the Ribbit emulator. Use at your own risk, and copy your SD card's files somewhere first."
 
 While it builds, a bar shows **Converting games… n of N**, then **Making the menu…**. **Stop** ends the build; what was written so far stays in the output folder, so build again before you use the card.
 
@@ -50,8 +54,7 @@ To change the card later, change the list and build again into the same place. S
 
 - green lines, `ok …`: a game put on the card, and the folder it went to;
 - red lines, `skip …`: a game left off, and why;
-- `note  menu without music: …`: the menu was built without music, and why (see [Settings](07-settings.md#leapster-2-bios));
-- an error, if the build stopped.
+- an error, if the build stopped. For example "the menu music can't be made: … is not the Leapster 2 BIOS 0.6 (152-12206)" means the BIOS file chosen is another version, or a damaged dump (see [Settings](07-settings.md#leapster-2-bios)).
 
 **Copy** copies the whole log, for a bug report.
 

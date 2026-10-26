@@ -9,7 +9,7 @@
 3. On the home screen, the **SD icon** (the arcade cabinet at the top right) is now in colour. Tap it.
 4. The console shows "Loading…" and starts the menu on the card.
 
-LeapLoader's menu says "Welcome to LeapLoader. Select a game." and plays its music (if the card was built with it; see [Settings](07-settings.md#leapster-2-bios)).
+LeapLoader's menu says "Welcome to LeapLoader. Select a game." and plays its music, made with the instruments of your Leapster 2 BIOS (see [Settings](07-settings.md#leapster-2-bios)). **Pause › Music: Off** turns it off.
 
 If you built the card with **LeapFrog's SD menu**, the SD icon opens that one instead, with its own buttons.
 
@@ -70,4 +70,4 @@ Each game saves as it would on its cartridge, but into a file in its folder on t
 
 To keep your progress safe, go back to the menu with HINT + A + B before you turn the console off, or at least wait a moment after the game saves. Loading a save after turning off has been checked in only a few games so far.
 
-To start a game afresh, delete its `save.dat` or `save.bin` on the PC (keep a copy if you might want it back).
+To start a game afresh, delete its `save.dat` or `save.bin` on the computer (keep a copy if you might want it back).

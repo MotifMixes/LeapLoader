@@ -86,7 +86,8 @@ def native_relocs(path):
         return [(int(o, 16), k, int(v, 16)) for o, k, v in (l.split() for l in open(out) if l.strip())]
 
 
-def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="LeapLoader", app_dir=None):
+def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="LeapLoader", app_dir=None,
+            make_room=False, chip_fill=0xFF):
     r"""`save_path`: when given (e.g. b:\Leapster\Apps\Game\save.dat), the game's saves go to
     that SD file through saveshim.py; None leaves the save calls as they are (no saves).
     `strict_checksum=False` converts a dump whose header checksum does not match (some dumps never
@@ -115,12 +116,21 @@ def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="L
 
     convert.files = {}  # extra files for the game's folder (images over 8 MiB: bigimage.py)
     big = None
-    if size > MAX_SIZE:
+    # make_room: an image that fits but is full (SpongeBob Saves the Day (USA), Lernen mit Leap: 8 MiB
+    # without a free byte, so no room for the save code) keeps some movies on the card as well.
+    if size > MAX_SIZE or make_room:
         import bigimage
         if app_dir is None:
             raise Unsupported(f"{size // 0x100000} MiB image; the SD load area holds at most 8 MiB")
         try:
-            big = bigimage.plan(src)
+            if make_room and size <= MAX_SIZE:
+                # Sound clips first (no movie moves); movies only if that is not enough.
+                try:
+                    big = bigimage.plan_room(src)
+                except bigimage.Unsupported:
+                    big = bigimage.plan(src)
+            else:
+                big = bigimage.plan(src)
         except bigimage.Unsupported as e:
             raise Unsupported(str(e))
     if d[0x100:0x100 + len(SIGNATURE)] != SIGNATURE:
@@ -297,8 +307,21 @@ def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="L
         pointers = {v for _, v, _ in edits}
         try:
             add_saves(d, movie_table, main_handle, ee_size, save_path, pointers, native=relocs is not None,
-                      menu_name=menu_name)
+                      menu_name=menu_name, chip_fill=chip_fill)
         except Unsupported as e:
+            if "no free space" in str(e) and big is None and app_dir is not None:
+                # A full image: again, with its sound clips (or movies) on the card for room. Games with
+                # native code get the chip zeroed, as the native chip below has it (Pet Pals shows junk
+                # names from an erased one); Spider-Man (Germany) went back with HINT + A + B only this way.
+                files = convert.files
+                try:
+                    return convert(src, save_path, relocs, strict_checksum, menu_name, app_dir, make_room=True,
+                                   chip_fill=0 if relocs is not None else 0xFF)
+                except Unsupported:
+                    # (The retry started its own notes and files: this conversion's go back.)
+                    convert.notes, convert.files = notes, files
+                    if relocs is None:
+                        raise e
             if relocs is None or "no free space" not in str(e):
                 raise
             # No room for the main-movie copy: the all-native chip (HINT + A + B without a prompt).
@@ -348,7 +371,8 @@ def free_space(d, need, pointers):
     raise Unsupported("no free space in the image for the save-enabled main movie")
 
 
-def add_saves(d, movie_table, main_handle, ee_size, save_path, pointers=(), native=False, menu_name="LeapLoader"):
+def add_saves(d, movie_table, main_handle, ee_size, save_path, pointers=(), native=False, menu_name="LeapLoader",
+              chip_fill=0xFF):
     """Saves for SD: a RAM save chip (eestub.py) behind the BIOS's EEPROM interface, added as one
     more 0x1009 resource (with a directory entry of its own when the game has no 0x1009 list),
     and a copy of the main movie that installs it (saveshim.build_ee_loader) and runs the
@@ -415,7 +439,7 @@ def add_saves(d, movie_table, main_handle, ee_size, save_path, pointers=(), nati
     leap = u32(0x140) - SD_BASE
     n_dir = struct.unpack_from("<H", d, leap + 6)[0]
     has_1009 = any(struct.unpack_from("<H", d, leap + 0x20 + 8 * i)[0] == 0x1009 for i in range(n_dir))
-    stub_len = len(eestub.build(SD_BASE, ee_size, save_path)) if chip else 0
+    stub_len = len(eestub.build(SD_BASE, ee_size, save_path, chip_fill)) if chip else 0
     n_1009 = find_dir_entry(d, 0x1009)[1] if chip and has_1009 else 0
     dir_len = 0 if has_1009 else 0x20 + 8 * (n_dir + 1) + 4
     size = lambda at: ((((at + len(m2) + 3) & ~3) + len(overlay) + 3) & ~3) + table_len - at \
@@ -425,7 +449,7 @@ def add_saves(d, movie_table, main_handle, ee_size, save_path, pointers=(), nati
     t_at = (o_at + len(overlay) + 3) & ~3
     if chip:
         s_at = (t_at + table_len + 3) & ~3
-        stub = eestub.build(SD_BASE + s_at, ee_size, save_path)
+        stub = eestub.build(SD_BASE + s_at, ee_size, save_path, chip_fill)
         d[s_at:s_at + len(stub)] = stub
         n_at = (s_at + len(stub) + 3) & ~3
         if has_1009:

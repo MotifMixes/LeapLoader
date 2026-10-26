@@ -1,6 +1,23 @@
 # LeapLoader handoff notes (updated 2026-10-25, late session)
 
-## START HERE (2026-10-26: release prep)
+## START HERE (2026-10-26, later: 0.2.0)
+* **0.2.0** (user asked: "hotfix but add the other stuff too"): start-up crash fix (Ribbit's GPU
+  fallback + guard file, leaploader.log, panic/native-crash logging), in-app updates (updates.rs,
+  install.rs: the package folder is swapped item by item; macOS swaps LeapLoader.app), packages
+  bring their own Python 3.12 + numpy + scipy (python-build-standalone 20261003; user: "people
+  shouldn't have to install anything besides leaploader"), the menu music is required (Build card
+  asks for the BIOS 0.6), Linux (WSL build) and macOS (manual workflow .github/workflows/macos.yml,
+  arm64 + Intel; scripts and Python in LeapLoader.app/Contents/Resources). Repo PUBLIC since
+  2026-10-26 (history rewritten first to drop C:\Users paths).
+* **"Incompatible" for tested games** (users' report): LeapLoader knows dumps by CRC-32 and players
+  had other versions. The user's two collection zips in D:\Downloads held 190 untested dumps
+  (`native\carts3`); all were tested (`native\g9`): 126 added to gamenames.py / gamenames.rs
+  (other versions, languages, prototypes; 201 names). Failures were prototypes, ROX protos (restart
+  loop), Leapster POP LP7 (crash), Demo Herbst 2004 (skipped).
+* **Full images** (how-it-works 4b'): sound clips to s.bin make room for saves; 22 games re-tested
+  (`native\g12`). Full regression of all 267 dumps: `native\g13` (`run_all13.py`).
+
+## Earlier: release prep (2026-10-26)
 * **Release prep (2026-10-26), nothing committed yet:** `scripts/package-release.py` builds
   `LeapLoader-<ver>-windows-x64.zip` (LeapLoader.exe, nativescan.exe, arc-gnu\ binutils from Ribbit's
   tools, the research scripts mkcard imports, README.txt, LICENSE.txt, notices + binutils source note,

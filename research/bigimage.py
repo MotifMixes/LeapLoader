@@ -105,6 +105,20 @@ def plan_movies(src):
     raise Unsupported(f"{len(src) // 0x100000} MiB image: moving its movies and sounds to the card does not make it fit")
 
 
+def plan_room(src):
+    """Room in a full image that fits (SpongeBob Saves the Day (USA): 8 MiB without a free byte, so
+    no room for the save code): only the LF_PlayLFC sound clips go to the card (plan_lfc), played
+    through the ring. No movie moves: a moved movie needs a slot as big as itself, and one game
+    (SpongeBob) loads a movie some way other than lfh, which went black (VERIFIED-EMU)."""
+    lfc = plan_lfc(src)
+    if not lfc:
+        raise Unsupported("no sound clips to move to the card")
+    end = _u32(src, 0x120) - CART_BASE + 12
+    if end - lfc["cut"] + lfc["ring"] + RESERVE > MAX_SIZE:
+        raise Unsupported("moving its sound clips to the card does not make room")
+    return {"mode": "lfc", "movies": [], "lfc": lfc, "slot": 0, "nslots": 0, "reserved": lfc["ring"]}
+
+
 LFC_RING = 0x4_0000  # sounds read from the card go round this buffer (the longest clip is ~37 KB)
 POOL_MOVIE_MIN = 0x8000  # pool mode: movies from this size go to the card
 POOL_MIN = 0x20_0000     # pool mode: the least room for the movies loaded at the same time
@@ -262,7 +276,27 @@ def install(d, src, big, app_dir, m, edits):
         return install_peg(d, src, big, app_dir, m, edits)
     if big["mode"] == "pool":
         return install_pool(d, src, big, app_dir, m, edits)
+    if big["mode"] == "lfc":
+        return install_room(d, src, big, app_dir, m, edits)
     return install_lfh(d, src, big, app_dir, m, edits)
+
+
+def install_room(d, src, big, app_dir, m, edits):
+    """plan_room: the sound clips go to s.bin, the ring at the top of the load area; LF_PlayLFC is
+    renamed LL_PlayLFC in every movie. Returns {file name: bytes}."""
+    pointers = {v for _, v, _ in edits}
+    lfc = big["lfc"]
+    files = {"s.bin": install_lfc(d, src, lfc, app_dir, m, pointers, SD_BASE + MAX_SIZE - lfc["ring"])}
+    for t in table_addresses_sd(d):
+        if _u32(d, t - SD_BASE + 8) != 0x8000_0000 or _u32(d, t - SD_BASE) != 0x100:
+            continue
+        for k in range(_u32(d, t - SD_BASE + 12)):
+            p = _u32(d, t - SD_BASE + 16 + 4 * k)
+            if SD_BASE <= p < SD_BASE + len(d) and d[p - SD_BASE:p - SD_BASE + 3] == b"FWS":
+                o = p - SD_BASE
+                ln = _u32(d, o + 4)
+                d[o:o + ln] = rename_playlfc(bytes(d[o:o + ln]))
+    return files
 
 
 def install_pool(d, src, big, app_dir, m, edits):

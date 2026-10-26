@@ -8,7 +8,7 @@ The left of LeapLoader's window is the games list: a row for each dump you added
 |---|---|
 | **+  Add roms…** (also **File › Add roms…**) | The dumps you choose: `.bin` files, or `.zip` files with a dump in them |
 | **📁  Add a folder…** (also **File › Add a folder of dumps…**) | Every `.bin` and `.zip` in a folder |
-| **🐸  Import Ribbit's Rom Folder** | Every `.bin` and `.zip` in the Ribbit emulator's games folders. Shown only when LeapLoader finds Ribbit's settings on this PC; point at the button to see which folders |
+| **🐸  Import Ribbit's Rom Folder** | Every `.bin` and `.zip` in the Ribbit emulator's games folders. Shown only when LeapLoader finds Ribbit's settings on this computer; point at the button to see which folders |
 
 LeapLoader remembers the list for next time. **File › Clear the list** empties it (your dumps stay where they are).
 

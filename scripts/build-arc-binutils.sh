@@ -35,9 +35,13 @@ mkdir build
 cd build
 # Only what the stubs need: no gdb, gprof, plugins or translations; the
 # documentation is not built (MAKEINFO=true).
+# macOS: the system's zlib (binutils' own copy no longer compiles with the current SDK: its
+# fdopen macro clashes with stdio.h's).
+zlib=""
+[ "$(uname -s)" = Darwin ] && zlib="--with-system-zlib"
 "../binutils-$VERSION/configure" --target=arc-elf32 --disable-nls --disable-werror --disable-gdb \
     --disable-gdbserver --disable-sim --disable-gprof --disable-gprofng --disable-plugins --without-zstd \
-    --disable-sframe MAKEINFO=true >configure.log
+    --disable-sframe $zlib MAKEINFO=true >configure.log
 jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
 if ! make -j"$jobs" MAKEINFO=true all-gas all-ld all-binutils >make.log 2>&1; then
     # Again one step at a time, so the error is the log's last lines (not mixed with other jobs').

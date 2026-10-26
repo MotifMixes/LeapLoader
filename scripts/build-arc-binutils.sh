@@ -39,7 +39,14 @@ cd build
     --disable-gdbserver --disable-sim --disable-gprof --disable-gprofng --disable-plugins --without-zstd \
     --disable-sframe MAKEINFO=true >configure.log
 jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
-make -j"$jobs" MAKEINFO=true all-gas all-ld all-binutils >make.log 2>&1 || { tail -40 make.log >&2; exit 1; }
+if ! make -j"$jobs" MAKEINFO=true all-gas all-ld all-binutils >make.log 2>&1; then
+    # Again one step at a time, so the error is the log's last lines (not mixed with other jobs').
+    make MAKEINFO=true all-gas all-ld all-binutils >make-serial.log 2>&1 || {
+        grep -n -i -E "error|undefined|not found" make-serial.log | tail -20 >&2
+        tail -30 make-serial.log >&2
+        exit 1
+    }
+fi
 
 cp gas/as-new "$out/arc-elf32-as"
 cp ld/ld-new "$out/arc-elf32-ld"

@@ -1052,7 +1052,7 @@ fn card_panel(ui: &mut egui::Ui, settings: &mut Settings, info: &Info, actions: 
             Some("LeapLoader's research folder was not found (File → Settings).")
         } else if needs_bios {
             Some(
-                "Choose your Leapster 2 BIOS 0.6 dump first: LeapLoader's menu plays its music with the BIOS's                   instruments (none are included).",
+                "Choose your Leapster 2 BIOS 0.6 dump first: LeapLoader's menu plays its music with the BIOS's instruments (none are included).",
             )
         } else {
             None

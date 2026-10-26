@@ -279,10 +279,13 @@ def personal_info(stage):
     if email and not email.endswith("@users.noreply.github.com"):
         needles.add(email)
     ours = needles | {"C:\\Users\\", "C:/Users/", "/Users/", "/home/"}
+    # On GitHub's machines the home folder is the runner's (/Users/runner), which is also where the
+    # numpy and scipy wheels were built: their libraries hold it, and it says nothing about anyone.
+    theirs = needles - {home, home.replace("\\", "/")} if os.environ.get("GITHUB_ACTIONS") else needles
     found = []
     for f in sorted(p for p in Path(stage).rglob("*") if p.is_file() and not p.is_symlink()):
         data = f.read_bytes()
-        check = needles if "python" in f.relative_to(stage).parts else ours
+        check = theirs if "python" in f.relative_to(stage).parts else ours
         found += [(f.relative_to(stage), n) for n in sorted(check) if n.encode() in data]
     return found
 

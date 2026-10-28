@@ -1,5 +1,21 @@
 # LeapLoader handoff notes (updated 2026-10-25, late session)
 
+## Tester reports, open (2026-10-28, relayed by the user; none investigated yet)
+* B5 regression of all 267 dumps running: `D:\leaploader-tmp\native\run_b5all.py` -> `g17\`, `g17.log`.
+  First 92: all load + HINT + A + B back. Recheck Bob l'eponge (France): no save on B5 (game started
+  ~40 s after the menu vs ~12 s on 0.6, so less play time before HINT + A + B).
+1. Pet Pals **prototype**: voices broken (its clips are in `s.bin`; check the s.bin path for this build).
+2. Letter Factory: wrong scene, usually the last one loaded. **FIXED in 0.2.3** (how-it-works
+   "Movie-table copy"): loaders updated the original movie table, the game reads add_saves' copy;
+   also broke Talking Words Factory stories and Story Explorers (black title) since 0.1.0. Test
+   files: `D:\leaploader-tmp\native\lf-fix\`. Verified in the emulator on 0.6 and B5 (LF chapter ABCD -> EFGH, SE title); not on hardware.
+3. Volume display always shows one or two bars (which screen/game not stated yet).
+4. Junie B. Jones and Mr. Pencil: drawings ("doodles") can't be saved, the games use Flash memory
+   save routines (not the EEPROM natives the RAM chip covers).
+5. Counting on Zero: playable, graphical glitches, HINT + A + B does not go back.
+6. ROX alpha builds don't work on the Leapster 2 (known: restart loop, HANDOFF "Incompatible").
+7. Scholastic Math Missions: the LFC voice channel and the embedded Flash player's sound play at once.
+
 ## START HERE (2026-10-26, latest: 0.2.2 hotfix: USB drive letter; 0.2.1 B5 fix)
 * **B5 (Leapster Connected) fixed** (how-it-works 8): 0.2.0's stubs called BIOS 0.6 addresses;
   `research/bioscall.py` makes them portable (service table + per-BIOS Flash natives). VERIFIED-EMU
@@ -16,7 +32,196 @@
   (critical-error dialog off); otherwise the log says "has a letter but can't be read yet" and the
   app offers "Open the SD card". Tested: readable disks unchanged, empty CD drive -> error 21, no
   dialog. Not tested on a console. SNES emulator idea parked (user); ARC GCC 2026.03 unpacked in
-  D:\leaploader-tmprc-gcc, untested.
+  D:\leaploader-tmp\arc-gcc, untested.
+* **SNES emulator, step 1 (measure) done 2026-10-26, awaiting the user's go-ahead.** snes9x2002 (Snes9x 1.39,
+  libretro; plain C build) compiled with ARC GCC 15.2 (`D:\leaploader-tmp\arc-gcc`, -mcpu=arc600 -mmul64
+  -mbarrel-shifter -mnorm -mswap -mno-sdata). Work in `D:\leaploader-tmp\snes` (s9x source, `cc.sh`, `port\`
+  driver/build.sh/native.sh, `run-*`). Harness `research/snesbench` (uncommitted): flat RAM + Ribbit CPU + memtiming,
+  frame markers, screenshots, `--profile`. **GCC reads MUL64's low word from r57 (mlo); on the Leapster it is in
+  MMID r58** (Ribbit LowLeapster, MAME): `cc.sh` renames mlo -> mmid; then the ARC build matched the PC build
+  exactly (40 frames: registers, RAM, VRAM, APU RAM). Results (900 frames, intros/menus, VERIFIED-EMU timing
+  only): Uniracers 459%, DKC 478%, Road Runner 253%, Mickey 354% of a 60 Hz frame at 96 MHz (double at 48);
+  worst frames ~700%. DKC profile: graphics ~65% (WRITE_4PIXELS16_ADD 20, S9xUpdateScreen 15, memset 13 =
+  clearing 2048-pitch buffers, DrawTile16 10), CPU+APU core ~25%, sound mix ~3%. Open: Snes9x licence is
+  non-commercial (not GPL-compatible: keep it out of LeapLoader's repo); newlib arc600 multilib uses gp small
+  data (bench sets gp; the console port needs a -mno-sdata C library); 8 MiB of frame buffers must shrink.
+* **SNES step 2 in progress (resume here in a NEW session; user: keep Claude usage low, scripts with one-line
+  output).** User: separate project (not in LeapLoader), lower graphics/audio as needed, goal full speed.
+  Done: driver options `-DNOTRANS` (transparency off), `-DSKIP=N` (draw 1 frame in N+1), `-DRATE=16000` (+ no
+  interpolation; libretro.c now mixes at Settings.SoundPlaybackRate); `LL_SPEEDHACKS` (in cflags.txt) in
+  cpuops.c (WAI + `BRA -3` with masked IRQ -> jump to NextEvent) and ppu_.c (same PC polling an APU port -> run
+  the SPC700 alone until it writes the port). Native screenshots unchanged. Scripts in D:\leaploader-tmp\snes:
+  `core.sh` (rebuild core), `bench.sh NAME FLAGS` (4 games, prints 4 lines), `port/hist.sh ROM` (65816 hot
+  addresses, PC build in WSL; run with MSYS_NO_PATHCONV=1), `port/cmp.sh FLAGS` (native screenshots on/off).
+  Core floor (SKIP=99, NOTRANS, RATE 16k) at 96 MHz: Uniracers 104%, DKC 58%, Road Runner 68%, Mickey 132%;
+  with SKIP=2 (20 fps) earlier: 197/132/117/197%. **2026-10-26 later: SPC700 shutdown works** (`-DSPC700_SHUTDOWN`
+  in cflags.txt; ppu_.c resumes `CPU.APU_APUExecuting`; apumem.h records `IAPU.WaitAddress1/2` on reads of
+  $F4-$F7/$FD-$FF again: snes9x2002 had dropped that, so the shutdown never fired). Floor now Uniracers 105%,
+  DKC 47%, Road Runner 61%, Mickey 130% (`v-shut2-floor`). Native screenshots: same screens, only fades/arrows a
+  frame out of phase. **Generic idle loops done (2026-10-26 later):** cpuops.c CPUShutdown: a taken BACKWARD branch reaching the same
+  address with the same registers/flags and no changing write since (`LLWriteCount`, getset.h: RAM writes that change
+  a byte, any non-RAM write; also APU port reads, so the port hack keeps those loops: without that DKC's sound
+  upload lost up to a line per handshake and the intro ran late) -> jump to NextEvent. 16-entry table, inline pre-check.
+  Floor (`v-idle4-floor`; `v-noidle-floor` = same build, check off via -DLL_NOIDLE): Uniracers 108% (106.6), DKC 50%
+  (47.4), Road Runner 60% (61.5), Mickey 110% (131). Screenshots: native DKC/Uni same screens; ARC Mickey/RR identical.
+  `port/cmpck.sh` prints which cmp/ shots differ (run in WSL).
+  **APU in batches (2026-10-26 later, `-DLL_APUBATCH` in cflags.txt):** the SPC700 no longer runs after every 65816
+  instruction; cpuexec.c S9xDoHBlankProcessing and ppu_.c port reads/writes ($2140-$217F) catch it up first
+  (`LL_APU_CATCHUP`, cpuexec.h) to `LLOpCycles` = CPU.Cycles at the start of the current instruction. Catching up to
+  CPU.Cycles instead split 16-bit port accesses (the SPC700 ran between the two bytes): Mickey went black after
+  Start. Floor (`v-batch2-floor`): Uniracers 102% (was 108), DKC 49% (50), Road Runner 59% (60), Mickey 103% (110);
+  all 12 screenshots byte-identical to `v-idle4-floor`. Old sources: `s9x/src/*.prebatch`, `cflags.prebatch.txt`.
+  Uniracers profile now: main loop 21% (~17 instructions per 65816 op), GetPPU 8, GetByte 6, DoHBlank 5, MixStereo
+  5, SetWord/GetWord 9. Next: Uniracers/Mickey are CPU-bound even with no drawing (floor > 100%), so the 65816 core
+  itself (memory access functions, opcode dispatch) is the limit; fewer drawn lines (224 -> 160) only helps DKC/RR.
+  **Inline memory fast paths tried and dropped (2026-10-27, `-DLL_FASTMEM`, getset.h; `v-fast-floor`):** i-cache misses
+  +60% (Mickey 0.99M -> 1.61M), floor Uni 102.1%, DKC 50.6, RR 59.3, Mickey 105.7 (worse). An i-miss costs ~70 cycles,
+  so code size matters more than call overhead; flag left off (`cflags.prefast.txt` = current cflags.txt). The main loop
+  is ~17 ARC instructions per 65816 op; further gains need a different core (threaded/assembly 65816, or a dynarec).
+  **Line sleeping (2026-10-27, `-DLL_SLEEP` in cflags.txt; `v-sleep3-floor`):** opcode histograms (`port/ophist-all.sh`,
+  WSL) showed Mickey ~60% and Uniracers ~70% of 65816 ops in wait loops that the idle/port hacks re-ran on every line
+  event. Now a detected wait sleeps whole lines (cpuexec.c `LLSleepLines`, called only from the line-event path: a
+  per-instruction check cost ~10%): idle loops with no I/O read (`LLIoReads`, getset.h) sleep until an interrupt/frame
+  end/any write; pure APU port polls (nothing else since the last poll: one port read, same registers, same port
+  values) run the SPC700 op by op (woken like a port read) until a port changes. Bug found on the way: the port
+  hack can fire on the read where the awaited value just arrived (sleeping then deadlocked until frame end), hence
+  the same-port-values rule. Floor: Uniracers 104.9% (was 102.0), DKC 51.9 (49.4), Road Runner 55.6 (58.6), Mickey
+  61.8 (102.8); all 12 screenshots byte-identical. Uniracers' wait (80:fac9/fad2 JSL 82:8035 + LDA $4212 + BMI/BPL)
+  reads $4212 whose hblank bit changes mid-line, so it can't sleep past one event; it is now CPU-core bound. Debug:
+  `-DLL_SLEEPDBG` (SLEEP/POLL lines), `port/dbg.sh` / `dbg-uni.sh` (PC build, WSL). Next: the assembly 65816 prototype
+  (user chose option 1 on 2026-10-27: hand-written ARC core, small for the i-cache; prototype the hot opcodes first).
+  **Assembly core prototype (2026-10-27, `-DLL_ASMCORE -DLL_MAPPAD` in cflags.txt; `v-asm9-floor`):** `asm/llcore.body.S`
+  (hand-written ARC600 dispatch loop) + `asm/gen.py` (adds per-mode handler lists from cpuops.c's tables -> `s9x/src/llcore.S`)
+  + `asm/offs.c` (struct offsets, `lloffs.inc`); core.sh builds them. PC/Cycles/NextEvent/MemSpeed live in registers; 31
+  opcodes in asm (all branches, CLC/SEC/XBA, INX/INY/DEX/DEY, TAY/TYA, LDA #/abs, CMP/CPX/CPY #), every other opcode calls
+  its C handler through one dispatch table per mode built by `LLAsmInit` (cpuops.c; C handlers tagged with bit 0). Flags and
+  line events are handled inside the loop (`LLflags`, `LLAsmEvent` in cpuexec.c), so it leaves to C only for NMI/IRQ/keys.
+  Backward branches do the LLIdle table check inline (C only when the entry matches). Scheduled for Ribbit's timing (load
+  result after 3 cycles, taken BRcc +2). **Exactness check:** `port/tracecmp.sh ROM N` (C core in `obj-c/` vs current,
+  per-frame registers + RAM/VRAM/APU hashes) and `port/trasm.sh ROM N "OpA,OpB"` (only those asm handlers: bisecting); Mickey
+  600 frames identical, all 12 screenshots byte-identical. Bug found that way: Cycles += MemSpeed sat in a `j.d` delay slot
+  that the C-handler path skipped. **LL_MAPPAD** (memmap.h): Map, WriteMap and MemorySpeed were 16 KB apart, so entry i of
+  each hit the same cache set (8 KB per way); 2 KB pads cut d-misses ~35% where the layout was unlucky (the asm build's new
+  .bss had shifted Memory: DKC 2.28M -> 3.39M misses before the pad, 2.24M after). Floor now (C+pad -> asm+pad): Uniracers
+  104.8 -> **99.8%**, DKC 51.4 -> 50.0, Road Runner 55.1 -> 51.0, Mickey 60.2 -> 58.8. Next: Uniracers' hot ops in asm
+  (JSL/RTL, PHP/PLP, REP/SEP with a cheaper table switch, PHX/PLX/PHY/PLY, LDA/CMP long), then stores (STA/STZ abs), then
+  16-bit modes. Old sources: `*.preasm`, `cflags.preasm.txt`, `core.preasm.sh`, `asm/llcore.body.v1.S`.
+  **Asm core step 2 (2026-10-27, `v-asm10-floor`, 49 handlers):** added stores `LLsetb`/`LLsetw` (RAM fast path with
+  WaitAddress = 0, LLWriteCount, SA-1 wait bytes -> C; else C `LLSetByte`/`LLSetWord`), stack helpers (S updated before
+  the access), `LLfix` (P changed: XH/YH clear, opcode + dispatch table from PL/emulation without the 4-way compare),
+  `LLsetpc` (S9xSetPCBase fast path, else C `LLSetPCBase`); opcodes PHP, PLP, REP, SEP (emulation -> C), PHX/PHY/PLX/PLY
+  (X1+X0), LDA/CMP long (M1+M0), JSL, RTL. `LLmemc` now calls r12 (args r0, r1). Floor: Uniracers 99.8 -> **83.0%**,
+  DKC 50.0 -> 49.7, Road Runner 51.0 -> 50.4, Mickey 58.8 -> 57.3; 12 screenshots byte-identical. tracecmp 600 frames:
+  Uni/RR/Mickey same; DKC differs only in the APU hash on ~24 frames (+ PC c0d4/c0d5 once, its `WAI; BRA -3` loop),
+  registers/RAM/VRAM always equal and final state equal: already so with the previous core and with no asm handlers
+  at all (frame-end APU catch-up phase), not from the new ops. Old: `asm/llcore.body.v2.S`, `asm/offs.v2.c`,
+  `cpuops.c.preasm2`. Next: stores (STA/STZ abs, STA long), DKC's hot ops (CB WAI, 45 EOR dp, 8D/85 STA, 4A LSR,
+  B7 LDA [dp],Y, A5, 49/09, 8E, C4), JSR/RTS, then 16-bit A ops.
+  **Drawing (2026-10-27, step 3; `v-fill-*`):** with drawing on, the frame cost was mostly d-cache misses (Ribbit's
+  32 KB write-allocate cache: a line costs fill 80 + write-back 42): the renderer cleared and drew the whole 172 KB
+  screen + z-buffer once per layer. Now (cflags.txt; old: `cflags.prestrip.txt`, `gfx.c.prestrip`, `tile.c.prefast`,
+  `libretro.c.prelcd`, `asmmemfuncs.h.prefill`): `-DLL_STRIPS=8` (gfx.c S9xUpdateScreen draws 8-line strips, z-buffers
+  strip-sized and cache resident; 16 and 4 were slower), `-DLL_FASTTILE` (tile.c DrawTile16 with GFX fields in locals:
+  GCC reloaded Z1/Z2/ScreenColors after every pixel store), `-DLL_LCD` (**the Leapster 2 LCD is 160x160** (Ribbit
+  lcd.rs: 12 bpp or RGB332): without transparency each strip is drawn into a small buffer and point-sampled at once
+  into `LLOut` 160x160 RGB565 (5 of 8 columns, 160 of 224 lines; full screen, so the picture is stretched vertically
+  by 4/3); the 64 unseen lines are not cleared or drawn by DrawTile16; the driver screenshots LLOut),
+  `-DLL_MEMSET32` (bug fix: non-ARM memset32 was memset, so the backdrop used only its low byte: Sunsoft's deep blue
+  showed light blue). Checks: `port/lcdck.py OLD NEW` (old full-size shots point-sampled = new shots; identical up to
+  LL_LCD + strips; LL_MEMSET32 changes only backdrop colours), `port/topng.py` (PPM -> PNG). Every frame drawn
+  (NOTRANS, RATE 16k), Uni/DKC/RR/Mickey: 328/247/192/230% -> **183/145/123/134%**. **Skip 1 (30 fps drawn): 133 / 97 /
+  86 / 95%** (DKC, RR, Mickey full speed on average); skip 2: ~121/86/77/85 (before MEMSET32). Floor 83/49/50/56. Per
+  drawn frame now: DrawTile16 ~24%, LLScale ~19% (the 51 KB LLOut writes: compulsory misses), memset ~7%. Worst
+  frames 250-335% (also in the floor: not drawing). Next: Uniracers' CPU floor (S9xGetPPU 12% = APU catch-up loop at
+  port reads, DoHBlank 7, MixStereo 6, asm core ~20), output straight in the LCD's 12 bpp (38 KB, not 51), worst frames.
+  **160x120 vs 160x160 (2026-10-27, user asked for screenshots):** `-DLL_LCDH=120` (gfx.c; default 160) draws 120 of
+  the 224 lines into the middle of LLOut (4:3 like a TV, black bars 20 lines each; `gfx.c.prelcdh`). Skip 1, NOTRANS,
+  RATE 16k at 96 MHz, 160 -> 120: Uni 132.8 -> 124.9%, DKC 96.7 -> 90.0, RR 86.1 -> 80.2, Mickey 95.0 -> 88.4
+  (`v-lcd160-skip1`, `v-lcd120-skip1`). Side-by-side sheet: scratchpad `sheet.py`. 120 makes small text (Sunsoft
+  credits) unreadable; 160 is stretched but readable. User to choose.
+  **LCD 12 bpp + shown columns (2026-10-27, user: keep 160x160, get full speed):** `-DLL_LCD12` (cflags.txt; old
+  `cflags.prelcd12.txt`, `*.prelcd12`): ScreenColors are 0xR0GB (pixform.h) and LLScale writes the LCD's own format
+  (12 bpp, 3 bytes per pair, stride 240) straight into VRAM 0x0300_0000 (no LLOut; snesbench now maps VRAM; driver
+  converts shots back to RGB565). tile.c `LLSHOWN` (`tile.c.prehide`): DrawTile16 draws only the 5 shown pixels of
+  each tile (16 generated loops). Skip 1: Uni 132.8 -> 125.7%, DKC 96.7 -> 90.6, RR 86.1 -> 80.3, Mickey 95.0 -> 88.4
+  (`v-lcd12-skip1`, `v-hide-skip1`); shots equal at 4 bits (`port/ck12.py`). DrawTile16's cost is d-misses on BG.Buffer
+  (tile cache), not pixel stores. **Not runnable in Ribbit yet:** the build is a bare program for snesbench (its
+  device registers, no BIOS, buttons or sound); a console port (SD-card native app via LeapLoader) is still to do.
+  **Auto frameskip = full game speed (2026-10-27, `v-auto2`):** snesbench has a cycle counter (read32 0x0180_FF20);
+  driver `-DAUTOSKIP` (port/main.c; old `main.c.preauto`) gives libretro's "auto" frameskip an underrun flag when a frame
+  starts more than 1/4 frame behind the 60 Hz clock, and waits for the clock when ahead; prints `AUTO drawn D of N, ...,
+  speed S%` (bench.sh shows it). NOTRANS, RATE 16k, 96 MHz, 900 frames: **all four at 99% game speed**; drawn frames
+  Uniracers 247 (~16 fps), DKC 547 (~36), Road Runner 650 (~43), Mickey 561 (~37). At 48 MHz the floor alone is
+  over 100% for Uniracers/Mickey/DKC (no full speed there). Next for smoother video: Uniracers' CPU floor; then the
+  console port (SD-card native app, buttons, sound), still not started.
+  **CPU clock: 96 MHz is confirmed** (user, 2026-10-27, from real-hardware research; MAME's 48 MHz is only because it
+  has no ARCompact DRC), so the 96 MHz numbers are the ones that count.
+  **Console port (2026-10-27, VERIFIED-EMU on BIOS 0.6 and B5; not on hardware):** `D:\leaploader-tmp\snes\console\`
+  (`build.sh [core]` -> code.bin; `mkimage.py code.bin CART.bin snes.bin`; copy on the user's Desktop). An SD image
+  (swfgen.pack_rib + one 0x1009 native `__snes` at 0x3C81_0000, called from the movie's first frame, never returns),
+  snes9x built with `-DLL_CONSOLE` into `obj-con/` (`*.precon` = sources before). Test it as
+  `Leapster/System/SDMenu/SDMenu.bin`; ROMs (.sfc/.smc/.swc/.fig/.bin, 4 MB max) in the card's `SNES\` folder, picked
+  from a list (BIOS file service 0x1035 slots 0x74/0x78/0x7C = findfirst/findnext/findclose, as BIOS 0.6 0x4002_BDC0:
+  **each findnext result is the next call's handle**; info +0x38 name, +0x13C attr bit 4 = folder). Battery saves
+  `SNES\NAME.srm` (every 5 s if changed and on leaving: written and seen on the card, loading back not checked).
+  Buttons from GPIO 0x0180_004C directly: A = SNES B, B = Y, HINT = A, PAUSE = Start; HOME + A = X, + B = Select,
+  + Left/Right = L/R; HOME + PAUSE 2 s = back to the list. Picture drawn straight into VRAM 0x0300_0000 (LCD base set
+  with LcdMPI +0x28 SetFrameBuffer), then its 2400 lines written back with `sr addr,[dc_fldl]` + poll DC_CTRL bit 8
+  (HYPOTHESIS for real hardware). Clock = RTOS ticks `[[0x3C7F_ACB0] + 0x34]` (0.6 and B5) x 0x2_7100 + timer 0
+  (0x0180_D084) position; the tick ISR 0x4004_C928 keeps the timer continuous (a first timer-only clock lost ~36%).
+  Own gp-free libc (`libc.c`: newlib's malloc/stdio/strcasecmp use gp); `build.sh` fails if anything uses gp. The
+  native runs on the Flash player task's stack (a stack of our own stopped the task at the first task switch).
+  Same 900 frames + input as the bench, nothing drawn (`floor.sh`, `-DLL_FLOOR -DLL_BENCHINPUT`): DKC 57.5%, Mickey
+  72.2, RR 63.0, Uni 101.2 (bench 49.7/57.3/50.4/83.0: BIOS tasks/interrupts, layout). Title screens (`speed.sh`):
+  DKC/Mickey/RR 100% game speed at 26/9/11 fps drawn, Uniracers 92% at 2 fps. sdboot-emu (LeapLoader research,
+  uncommitted): `SDBOOT_PROFILE_TOP=N` env var and cache misses + cycles in the `mem` output.
+  **Sound (2026-10-27, VERIFIED-EMU on 0.6 and B5; not on hardware):** console.c `pcm_start`/`pcm_isr`
+  (`console.c.presound` = before). snes9x mixes 16 kHz stereo -> mono `(L+R)/2` into a 4096-sample ring
+  (`audio_batch`); our own handler for interrupt 0x13 (installed with the kernel's `_int_install_isr`,
+  `[[gp+4]+0x10]+0x180`; +0x198/+0x19C = interrupts on/off) fills the 128-sample half of PCM DMA channel 1 just
+  played (32 kHz, 2x with linear steps in quarters, no multiplies; step +-0.8% from the ring's level, aim 800
+  samples = 50 ms; underrun fades to 0, counted in `ll_under`). Start sequence copied from BIOS 0.6 0x4003_D712
+  (its PCM start; stop 0x4003_D7B8; its ISR 0x4003_D994; buffers in VRAM 0x0300_EE00 ch1 / 0x0300_F200 ch0, as
+  the BIOS's 0x0300_EC00 + 0x200/+0x600; 0x7F01 both channels, ch0 first, wait on 0x0180_0010 bit 7, then ch1,
+  0x0180_20F4 |= 0x400). Registers: 0x0180_3000/04 ch0 ctrl/base, 08/0C ch1 (base reads back base + position),
+  flags 0x0180_0080 bits 20/21 (write 1 clears), enable 0x0180_0084. Output = the game's music (no repeats,
+  no large jumps); 28 s per game with Start at 15 s: underrun DKC 73 ms, Mickey 0.19 s, RR 0.48 s, Uniracers
+  3.5 s (it runs below full speed). Cost: title-screen speed DKC/Mickey/RR 100% at 27.5/8.5/9.5 fps drawn,
+  Uniracers 88.8% at 1.9. Bug found on the way: a 16.16 read position wrapped after 65536 samples and the ring
+  then replayed 256 ms forever. **Open:** whether the console's volume buttons act on PCM (the BIOS mixer
+  0x4003_DF0C has only filter coefficients; if the volume is in software, ours is always full); the level
+  (full-scale SNES mix) on the speaker; underruns when a game runs below full speed. The snesbench and PC
+  (64-bit) builds give no sound at all (bench: DKC's DSP FLG stays 0x60 for 30 s; not understood), so sound is
+  only checked in sdboot-emu (`audio FILE.wav` writes FILE-32k.wav). `port/sleepcmp.sh` (bench traces with and
+  without LL_SLEEP, both without the asm core; `EXTRA=-DQUIETIN`: only Start at frame 720) showed Mickey
+  identical for 1800 frames. snes.bin with sound on the user's Desktop. Next: real-hardware test by the user,
+  then volume, drawing cost on hardware-like scenes.
+  **Volume (2026-10-27, VERIFIED-EMU on 0.6; not on hardware; `snes2.bin` on the Desktop, snes.bin kept as it was):**
+  console.c (`console.c.prevol` = before) Volume - / + (GPIO 0x8000 / 0x1_0000) set a software level 0-10 in 3 dB
+  steps (gain /256 applied in audio_batch, so 50 ms late; start at 10 = full, the old level). It changes at once, then
+  every 1/10 s after 1/3 s held; a 10-segment bar shows top left for 1.5 s (drawn only on drawn frames). Test
+  `console/vt/` (card copy `cardv`, DKC, 4x Volume -): PCM identical to the old build before the presses, exactly
+  -12.0 dB after. Not known: whether the BIOS also reacts to these buttons on hardware (no change seen in the emulator).
+  Next: hardware test of snes.bin / snes2.bin by the user, then drawing cost in gameplay scenes.
+  **DKC levels (2026-10-27, user: "make sure DKC runs full speed in levels also"; bench only, console not rebuilt):**
+  `level.sh NAME "FLAGS" [NAME "FLAGS"...]` (D:\leaploader-tmp\snes): DKC 3600 frames with the bench's default input,
+  which reaches Jungle Hijinks at ~frame 1800; prints the average cost of frames 1800-3599 (+ `AUTO1800` drawn count
+  in main.c). Level, 96 MHz: floor 57% (intros 49%), every frame drawn 223%, skip 1 140%; auto: 99% game speed at
+  ~18 fps. Cause: `LL_UPDCOUNT` (debug counters, gfx.c/ppu_.c/tile.c/main.c) showed ~95 S9xUpdateScreen calls per level
+  frame, all from $2122: HDMA rewrites CG-RAM entries 0 (backdrop gradient) and 1 every line or two, so the screen was
+  drawn in ~1.4-line parts (4700 DrawTile16 calls of 2.9 lines per frame). **`-DLL_BACKLINE`** (cflags.txt; `ppu.h.preback`,
+  `gfx.c.preback`): without transparency a write to entry 0 doesn't flush; `LLBackSave` keeps entry 0 per line
+  (`LLBackLine`) and the no-transparency backdrop fill uses it (watch the dangling else: FLUSH_REDRAW is a bare if).
+  Exact: 72 level shots + the 4 games' skip-1 shots byte-identical. Level every frame 223 -> 198%; auto ~18 -> **21 fps**
+  (631 of 1800 drawn), 99% speed. Entry 1 still splits (~27 calls/frame); ignoring it (`-DLL_CGTRY`, test only) gives 178%
+  but changes visible pixels (rows 48-67): needs an exact method (idea: marker colours with bits 8-11 set, resolved per
+  line in LLScale). **`-DLL_HIDESKIP`** (`*.prehskip`): parts / 1-2-line DrawTile16 calls on lines the LCD doesn't show
+  are skipped; exact, but only ~0.5%. Other measurements: mixing at 8 kHz saves only ~3% (kept 16k). Uniracers floor
+  (`SNESBENCH_TOP=400` env: longer profile list in snesbench) = 65816 52%, SPC700 ~19% (ops 8.7 + dispatch loop in
+  S9xGetPPU/DoHBlank), sound mix 10%. Next options: exact entry-1 handling (DKC fps), SPC700 asm dispatch + hot ops,
+  65816 core redesign (dispatch ~13 instr/op, ~35 cycles per op on average), cheaper drawing (DrawTile16 32%, LLScale 12%).
+  Also: 7 orphaned `grep --line-buffered` processes from 2026-10-23..25 sessions (2 spinning ~1 core each); user
+  declined killing them for now.
 * Still to do: game names on real consoles (MAME names, part numbers), menu battery icon and power
   button.
 
@@ -122,12 +327,12 @@ State in one place; details in the sections below and in how-it-works.md, games.
 ## Latest (2026-10-25, later): menu polish, HINT + A + B fixes, start-up time, Rust app started
 * Menu (user asked): louder music (raw volume 127), long titles scroll at once and 2x faster, BIOS
   D-pad sounds on moves/arrows (lfh 29 / 27), tool keys and OK light up, CLR key on the keyboard,
-  thin footer with only the version. VERIFIED-EMU (`D:\leaploader-tmp030	5*.txt`).
+  thin footer with only the version. VERIFIED-EMU (`D:\leaploader-tmp\v030\t5*.txt`).
 * HINT + A + B (user: "isn't showing up"): it never showed in some games. Fixed (VERIFIED-EMU) in
   Kindergarten, I Spy Challenger, Creature Create: prompt appended to the game's own movie table,
   native games poll the buttons through `__llEE` (how-it-works 3). **Cars still has none** (open).
 * Start-up time (user: games load slower than normal): in 1st Grade the title comes ~4-5 s later
-  with saves than without (VERIFIED-EMU, `D:\leaploader-tmp030is2.py`): the ActionScript save
+  with saves than without (VERIFIED-EMU, `D:\leaploader-tmp\v030\bis2.py`): the ActionScript save
   shim (the game reads its save memory through AS functions, byte by byte). Save loaders now avoid
   string methods (opcodes + hex table); that did not change the fresh-card case. Idea: give
   Flash-only games the RAM chip (eestub) too, so the BIOS natives stay native (needs a 0x1009
@@ -149,7 +354,7 @@ ibbitcard3\sdcard-new.img` (77 games). Not installed yet:
   BIOS instruments (stems at 48 kHz float, 13 tracks, 1401 notes; only track 031's stray chord at
   quarter 619 is left out), mixes to 8 kHz A-law and the menu plays it with LF_PlayAudioRaw: once from
   the start, then looping from **0:20.210** (user asked; `mkcard.py --music-loop 20.21`). Stems and
-  previews: `D:\leaploader-tmp030\music` (contain BIOS samples: never commit). The user also said
+  previews: `D:\leaploader-tmp\v030\music` (contain BIOS samples: never commit). The user also said
   they would make a new song.
 * **Ribbit fix** (not committed): a paused voice reads as free in the voice status register (the BIOS
   stops raw sounds with the pause command and then looked for a free voice in vain). Logged in Ribbit
@@ -157,7 +362,7 @@ ibbitcard3\sdcard-new.img` (77 games). Not installed yet:
   is denied"); the harness `D:/leaploader-tmp/target-emu` is rebuilt.
 * Full card: `D:\leaploader-tmp
 ibbitcard3` (`tree`, `sdcard-new.img`, `script.txt`, `out\sheet.png`);
-  not yet installed as Ribbit's card (ask). Tests: `D:\leaploader-tmp030` (`joins.py` checks the
+  not yet installed as Ribbit's card (ask). Tests: `D:\leaploader-tmp\v030` (`joins.py` checks the
   music joins against the ideal timeline; `t4.txt` music toggle, HINT+A+B, Home).
 
 ## Latest (2026-10-25, later session): read docs/how-it-works.md and docs/games.md

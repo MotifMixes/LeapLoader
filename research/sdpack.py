@@ -308,6 +308,8 @@ def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="L
         try:
             add_saves(d, movie_table, main_handle, ee_size, save_path, pointers, native=relocs is not None,
                       menu_name=menu_name, chip_fill=chip_fill)
+            if big is not None:
+                bigimage.follow_table_copy(d, *add_saves.table_copy)
         except Unsupported as e:
             if "no free space" in str(e) and big is None and app_dir is not None:
                 # A full image: again, with its sound clips (or movies) on the card for room. Games with
@@ -481,6 +483,7 @@ def add_saves(d, movie_table, main_handle, ee_size, save_path, pointers=(), nati
     if len(pointed) != 1:
         raise Unsupported("the main movie table is not in the 0x1006 list once")
     struct.pack_into("<I", d, list_1006 + 8 * pointed[0] + 4, SD_BASE + t_at)
+    add_saves.table_copy = (movie_table, t_at, count)
     return renamed
 
 

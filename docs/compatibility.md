@@ -1,11 +1,11 @@
 # Compatible games
 
 Which Leapster games LeapLoader can put on a Leapster 2's SD card, and how far each one has been tested.
-Last updated 2026-10-26 (LeapLoader 0.2.0).
+Last updated 2026-10-28 (LeapLoader 0.2.3).
 
 > [!WARNING]
 > **Nothing has been tested on a real Leapster 2 yet.** Every result below comes from the
-> [Ribbit](https://github.com/MotifMixes/Ribbit) emulator, with the Leapster 2 BIOS 0.6 (152-12206); a sample was also run with the Connected's BIOS B5. A game that
+> [Ribbit](https://github.com/MotifMixes/Ribbit) emulator, with the Leapster 2 BIOS 0.6 (152-12206); every dump was also run with the Connected's BIOS B5 (2026-10-28), with the same results. A game that
 > works there will very probably work on the console, but it has not been seen. Copy your SD card's files
 > somewhere before you try a card, and please report what happens.
 
@@ -87,7 +87,7 @@ LeapLoader keeps some of their videos or stories as extra files on the card, loa
 | Kindergarten | 8 MiB | Yes | Yes | `save.dat` |  |
 | Learning with Leap | 8 MiB | Yes | Yes | `save.dat` |  |
 | Letterpillar | 4 MiB | Yes | Yes | `save.dat` |  |
-| The Letter Factory | 16 MiB | Yes | Yes | `save.dat` | 7 story files stay on the card |
+| The Letter Factory | 16 MiB | Yes | Yes | `save.dat` | 7 story files stay on the card; a chapter plays and loads the next one by itself (fixed in 0.2.3: before, the stories showed a black screen or the wrong scene) |
 | Letters on the Loose | 8 MiB | Yes | Yes | `save.dat` |  |
 | Madagascar | 8 MiB | Yes | Yes | `save.dat` |  |
 | Math Baseball | 8 MiB | Yes | Yes | `save.dat` |  |
@@ -118,8 +118,8 @@ LeapLoader keeps some of their videos or stories as extra files on the card, loa
 | SpongeBob SquarePants: Through the Wormhole | 4 MiB | Yes | Yes | `save.dat` |  |
 | Star Wars: Jedi Math | 8 MiB | Yes | Yes | `save.dat` |  |
 | Star Wars: Jedi Reading | 8 MiB | Yes | Yes | `save.dat` |  |
-| Story Explorers | 16 MiB | Yes | Yes | `save.dat` | 2 files of stories and sounds stay on the card; tested to the first activity, later stories not reached yet |
-| The Talking Words Factory | 16 MiB | Yes | Yes | `save.dat` | 8 story files stay on the card; a story plays |
+| Story Explorers | 16 MiB | Yes | Yes | `save.dat` | 2 files of stories and sounds stay on the card; tested to the first activity, later stories not reached yet (fixed in 0.2.3: before, the title screen was black) |
+| The Talking Words Factory | 16 MiB | Yes | Yes | `save.dat` | 8 story files stay on the card; a story plays (0.2.3 fixes the same story loading bug as The Letter Factory) |
 | Tangled | 8 MiB | Yes | Yes | `save.dat` |  |
 | Thomas & Friends: Calling All Engines | 8 MiB | Yes | Yes | `save.dat` |  |
 | Toy Story 3 | 8 MiB | Yes | Yes | `save.dat` |  |

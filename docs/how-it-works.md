@@ -338,6 +338,16 @@ read into a RAM slot at the top of the 8 MiB area just before the game uses them
    Grammar Rock plays "A noun's a special kind of word", Talking Words Factory and Letter Factory
    play stories. Not verified: the songs' sound, every story/video, real-hardware loading time
    (2-3 MB per load).
+   **Movie-table copy (fixed 2026-10-28):** the saves step (sdpack `add_saves`) points 0x1006 at a
+   copy of the main movie table (one more movie: the overlay), after the loaders were installed, so
+   llZ and the pool loader updated table words the game no longer read: a black screen on the
+   first story (Letter Factory, Talking Words Factory) or the title (Story Explorers), then always
+   the story left in the first slot (tester: "plays the wrong scene, usually the last one loaded").
+   Broken in every release 0.1.0-0.2.2. `bigimage.follow_table_copy` now moves the loaders'
+   table-word addresses to the copy (TWF 8, Story Explorers 70, America Rock / Grammar Rock 0:
+   their videos are in table 10). The story files on the card get `lfh` -> `llZ` too (a story
+   loads the next chapter itself). VERIFIED-EMU (0.6): Letter Factory ABCD plays, then loads m3.bin
+   and plays EFGH; Story Explorers shows its title.
 4. **Story Explorers** (16 MiB; VERIFIED-EMU 2026-10-25): 96 movies (7.4 MiB), 2331 sound clips
    (5 MiB), a 1.9 MB table-1 resource. Neither way above fits it: its movies are loaded with
    `GetURL2(handle, "_level" + N)` from handles that `lfh()` put into arrays at start-up (so an lfh

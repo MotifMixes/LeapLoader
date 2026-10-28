@@ -271,7 +271,24 @@ def rename_lfh(movie):
     return re.sub(rb"(?<![A-Za-z0-9_$.:])lfh\x00", b"llZ\x00", movie)
 
 
+# The loaders' code in the image, (offset, length): they hold the addresses of movie-table words.
+placed = []
+
+
+def follow_table_copy(d, table, copy, count):
+    """sdpack.add_saves makes the game read a copy of its movie table (at `copy`, both offsets in
+    `d`): the loaders' table-word addresses move to the copy, or what they load is never seen
+    (Letter Factory 2026-10-28: a black screen, then always the story in the first slot)."""
+    lo, hi = SD_BASE + table + 16, SD_BASE + table + 16 + 4 * count
+    for at, n in placed:
+        for o in range(at, at + n - 3, 4):
+            v = _u32(d, o)
+            if lo <= v < hi:
+                struct.pack_into("<I", d, o, v - table + copy)
+
+
 def install(d, src, big, app_dir, m, edits):
+    placed.clear()
     if big["mode"] == "peg":
         return install_peg(d, src, big, app_dir, m, edits)
     if big["mode"] == "pool":
@@ -344,6 +361,7 @@ def install_pool(d, src, big, app_dir, m, edits):
     at = sdpack.free_space(d, size + 64, pointers)
     code = streamstub.build_pool(SD_BASE + at, path, rec_list, pool, ring, stub)
     d[at:at + len(code)] = code
+    placed.append((at, len(code)))
     add_native_resource(d, SD_BASE + at, pointers)
     files = {"m.bin": bytes(data)}
     if lfc:
@@ -369,6 +387,7 @@ def install_lfh(d, src, big, app_dir, m, edits):
     at = sdpack.free_space(d, code_len + 64, pointers)
     code, blob = streamstub.build(SD_BASE + at, groups, slots, slot)
     d[at:at + len(code)] = code
+    placed.append((at, len(code)))
     add_native_resource(d, SD_BASE + at + blob, pointers)
     renames = [rename_lfh]
     lfc = big.get("lfc")
@@ -386,9 +405,11 @@ def install_lfh(d, src, big, app_dir, m, edits):
                 ln = _u32(d, o + 4)
                 for r in renames:
                     d[o:o + ln] = r(bytes(d[o:o + ln]))
-    if lfc:
-        for name in [n for n in files if n.startswith("m")]:
-            files[name] = rename_playlfc(files[name])
+    # The stories on the card load each other too (a story's own chapter menu): without llZ there,
+    # the table word still points at a slot holding whichever story was read last.
+    for name in [n for n in files if n.startswith("m")]:
+        for r in renames:
+            files[name] = r(files[name])
     return files
 
 
@@ -420,6 +441,7 @@ def install_lfc(d, src, lfc, app_dir, m, pointers, ring):
     at = sdpack.free_space(d, size + 64, pointers)
     code = streamstub.build_lfc(SD_BASE + at, app_dir + "\\s.bin", first, recs, ring, lfc["ring"])
     d[at:at + len(code)] = code
+    placed.append((at, len(code)))
     add_native_resource(d, SD_BASE + at, pointers)
     return bytes(data)
 
@@ -591,6 +613,7 @@ def install_peg(d, src, big, app_dir, m, edits):
     at = sdpack.free_space(d, size + 64, pointers)
     code, addr = streamstub.build_peg(SD_BASE + at, groups, slot_base, slot, orig_w, orig_p)
     d[at:at + len(code)] = code
+    placed.append((at, len(code)))
     struct.pack_into("<I", d, w_off, addr["wgdb"])
     struct.pack_into("<I", d, p_off, addr["peg"])
     return files

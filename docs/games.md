@@ -59,7 +59,7 @@ Strays = reads of the empty cartridge window in the test run (0 is the goal).
 | SpongeBob Through the Wormhole | 4 | RAM chip | prompt | 0 | |
 | Star Wars Jedi Math | 8 | RAM chip | prompt | 0 | |
 | Star Wars Jedi Reading | 8 | RAM chip | prompt | 0 | earlier: black with the RAM chip; recheck by hand |
-| **Talking Words Factory** | **16** | RAM chip | prompt | 0 | 8 stories on the card (`m1-m8.bin`); a story plays |
+| **Talking Words Factory** | **16** | RAM chip | prompt | 0 | 8 stories on the card (`m1-m8.bin`); a story plays; loader follows the movie-table copy since 0.2.3 |
 | The Batman: Multiply, Divide and Conquer (DE) | 8 | RAM chip | prompt | 0 | |
 | Thomas & Friends | 8 | RAM chip | prompt | 0 | |
 | Top-Secret Personal Beeswax (tspbeeswax) | 8 | RAM chip | prompt | 0 | |
@@ -84,7 +84,7 @@ Strays = reads of the empty cartridge window in the test run (0 is the goal).
 | Go Diego Go! Animal Rescuer | 8 | native chip | native | 0 | was white: 571 resource handles had been "relocated" (handle rule); native HINT+A+B VERIFIED-EMU |
 | I Spy Treasure Hunt | 8 | RAM chip | prompt | 0 | |
 | The Incredibles | 8 | RAM chip | prompt | 0 | |
-| Letter Factory | **16** | RAM chip | prompt | 0 | 7 stories on the card (`m*.bin`) |
+| Letter Factory | **16** | RAM chip | prompt | 0 | 7 stories on the card (`m*.bin`); chapter ABCD plays and loads EFGH (0.6 + B5; wrong/black scene before 0.2.3) |
 | Math Baseball | 8 | AS shim | prompt | 0 | |
 | Math Missions | 8 | RAM chip | prompt | 0 | |
 | Mr. Pencil's Learn to Draw & Write | 8 | RAM chip | prompt | 0 | |
@@ -98,7 +98,7 @@ Strays = reads of the empty cartridge window in the test run (0 is the goal).
 | Schoolhouse Rock: Grammar Rock | **16** | RAM chip | prompt | 0 | videos on the card; "A noun's a special kind of word" plays |
 | Scooby-Doo Arcade | 2 | RAM chip | prompt | 0 | bitmaps with self pointers (table 13); reaches a game screen; 22,400 reads at 0x0F80_35A8 + writes to 0 remain (a bad image copy) |
 | Scooby-Doo! Et les nombres fous (FR) | 4 | RAM chip | prompt | 0 | |
-| Story Explorers | 16 | RAM chip | prompt | 0 | **pool mode** (how-it-works 6.4): 70 movies in `m.bin`, 2282 sound clips in `s.bin`; story + narration + first activity tested; later stories not reached |
+| Story Explorers | 16 | RAM chip | prompt | 0 | **pool mode** (how-it-works 6.4): 70 movies in `m.bin`, 2282 sound clips in `s.bin`; story + narration + first activity tested (title was black before 0.2.3); later stories not reached |
 | Tangled | 8 | RAM chip | prompt | 0 | |
 | Toy Story 3 | 8 | RAM chip | prompt | 8 | |
 | Up | 8 | RAM chip | prompt | 0 | |

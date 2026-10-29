@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The games list: the user's cartridge dumps (.bin, or a .zip with a .bin
-//! inside), each with the name the card will give it (gamenames.rs).
+//! inside), each with the name the card will give it (gamenames.rs), and
+//! homebrew packages (a folder with app.txt: docs/how-it-works.md section 1).
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -38,11 +39,16 @@ pub struct Dump {
     /// Selected in the list (Ctrl+click, Shift+click) for doing something
     /// to several games at once.
     pub picked: bool,
+    /// A homebrew package (a folder), not a cartridge dump.
+    pub homebrew: bool,
 }
 
 impl Dump {
     /// Reads the dump at `path` and names it.
     pub fn open(path: &Path) -> anyhow::Result<Self> {
+        if is_homebrew(path) {
+            return open_homebrew(path);
+        }
         let (data, zip_entry) = read_dump(path)?;
         let crc = crc32fast::hash(&data);
         // mkcard names a dump from the file it is given: for a zip, the .bin
@@ -64,6 +70,7 @@ impl Dump {
             outcome: None,
             enabled: false,
             picked: false,
+            homebrew: false,
         })
         .map(|mut d| {
             // A dump LeapLoader doesn't know starts off the card.
@@ -76,7 +83,7 @@ impl Dump {
     /// dump in gamenames.rs's table converts and runs from the SD card
     /// (VERIFIED-EMU in docs/HANDOFF.md: 77 of 77, in the Ribbit emulator).
     pub fn tested(&self) -> bool {
-        crate::gamenames::known_name(self.crc).is_some()
+        self.homebrew || crate::gamenames::known_name(self.crc).is_some()
     }
 
     /// The file name mkcard prints for this dump (its ok/skip lines).
@@ -86,6 +93,68 @@ impl Dump {
             None => self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
         }
     }
+}
+
+/// The file in a homebrew package that names it (mkcard.py HOMEBREW_MANIFEST).
+const MANIFEST: &str = "app.txt";
+
+/// Whether `path` is a homebrew package: a folder with app.txt.
+pub fn is_homebrew(path: &Path) -> bool {
+    path.join(MANIFEST).is_file()
+}
+
+/// A homebrew package's `key=value` manifest (keys in lower case).
+pub fn manifest(path: &Path) -> anyhow::Result<Vec<(String, String)>> {
+    let text = std::fs::read_to_string(path.join(MANIFEST))?;
+    Ok(text
+        .trim_start_matches('\u{feff}')
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split_once('='))
+        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string()))
+        .collect())
+}
+
+/// A homebrew package in the list: named by its manifest, its size the whole
+/// folder's (all of it goes on the card), on the card from the start.
+fn open_homebrew(path: &Path) -> anyhow::Result<Dump> {
+    let m = manifest(path)?;
+    let get = |k: &str| m.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone()).filter(|v| !v.is_empty());
+    let name = get("name").ok_or_else(|| anyhow::anyhow!("its app.txt has no name="))?;
+    anyhow::ensure!(get("id").is_some(), "its app.txt has no id=");
+    let image = path.join(get("image").unwrap_or_else(|| "game.bin".into()));
+    anyhow::ensure!(image.is_file(), "{} is missing", image.display());
+    let mut tags = Vec::new();
+    if let Some(v) = get("version") {
+        tags.push(format!("v{}", v.trim_start_matches(['v', 'V'])));
+    }
+    Ok(Dump {
+        path: path.to_path_buf(),
+        zip_entry: None,
+        name,
+        tags,
+        size: folder_size(path),
+        crc: crc32fast::hash(&std::fs::read(&image)?),
+        outcome: None,
+        enabled: true,
+        picked: false,
+        homebrew: true,
+    })
+}
+
+fn folder_size(path: &Path) -> u64 {
+    std::fs::read_dir(path)
+        .map(|d| {
+            d.flatten()
+                .map(|e| match e.metadata() {
+                    Ok(m) if m.is_dir() => folder_size(&e.path()),
+                    Ok(m) => m.len(),
+                    Err(_) => 0,
+                })
+                .sum()
+        })
+        .unwrap_or(0)
 }
 
 /// The last part of a zip entry's name ("games/x.bin" -> "x.bin").
@@ -125,10 +194,19 @@ pub fn read_dump(path: &Path) -> anyhow::Result<(Vec<u8>, Option<String>)> {
     Ok((data, Some(name)))
 }
 
-/// The dumps in a folder (not its subfolders, as mkcard.py), by name.
+/// The dumps in a folder (not its subfolders, as mkcard.py) and the homebrew
+/// packages in it, by name; a homebrew package itself is the one game.
 pub fn dumps_in(folder: &Path) -> Vec<PathBuf> {
+    if is_homebrew(folder) {
+        return vec![folder.to_path_buf()];
+    }
     let mut found: Vec<PathBuf> = std::fs::read_dir(folder)
-        .map(|d| d.flatten().map(|e| e.path()).filter(|p| p.is_file() && is_dump_file(p)).collect())
+        .map(|d| {
+            d.flatten()
+                .map(|e| e.path())
+                .filter(|p| (p.is_file() && is_dump_file(p)) || (p.is_dir() && is_homebrew(p)))
+                .collect()
+        })
         .unwrap_or_default();
     found.sort();
     found
@@ -231,6 +309,7 @@ mod tests {
                 outcome: None,
                 enabled: true,
                 picked: false,
+                homebrew: false,
             })
             .collect()
     }
@@ -253,6 +332,24 @@ mod tests {
         click(&mut d, a, 0, false, false);
         assert!(picked(&d).is_empty());
         assert_eq!(on(&d), [2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn homebrew_packages_are_found_and_named() {
+        let dir = std::env::temp_dir().join(format!("ll-homebrew-test-{}", std::process::id()));
+        let pkg = dir.join("NES");
+        std::fs::create_dir_all(pkg.join("card")).unwrap();
+        std::fs::write(pkg.join("app.txt"), "\u{feff}# test\nname = NES\nid=NES\nversion=0.1\n").unwrap();
+        std::fs::write(pkg.join("game.bin"), b"LEAP").unwrap();
+        std::fs::write(dir.join("x.bin"), b"dump").unwrap();
+        assert_eq!(dumps_in(&dir), vec![pkg.clone(), dir.join("x.bin")]);
+        assert_eq!(dumps_in(&pkg), vec![pkg.clone()]);
+        let d = Dump::open(&pkg).unwrap();
+        assert!(d.homebrew && d.enabled && d.tested());
+        assert_eq!((d.name.as_str(), d.tags.clone(), d.label()), ("NES", vec!["v0.1".to_string()], "NES".to_string()));
+        std::fs::write(pkg.join("app.txt"), "name=NES\n").unwrap();
+        assert!(Dump::open(&pkg).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

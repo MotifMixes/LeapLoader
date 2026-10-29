@@ -623,12 +623,31 @@ fn selection_bar(ui: &mut egui::Ui, picked: usize, actions: &mut Vec<Action>) {
     ui.label(egui::RichText::new(text).color(PURPLE_LIGHT).strong());
 }
 
+/// The homebrew mark's size (a blue disc with a white check, as on the card's menu).
+const HOMEBREW_CHECK: f32 = 16.0;
+const HOMEBREW_BLUE: egui::Color32 = egui::Color32::from_rgb(0x1D, 0x9B, 0xF0);
+
+fn homebrew_check(ui: &mut egui::Ui) -> egui::Response {
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(HOMEBREW_CHECK, HOMEBREW_CHECK), egui::Sense::hover());
+    let p = ui.painter();
+    let c = rect.center();
+    let r = HOMEBREW_CHECK / 2.0;
+    p.circle_filled(c, r, HOMEBREW_BLUE);
+    let pt = |x: f32, y: f32| c + egui::vec2(x * r, y * r);
+    p.line_segment([pt(-0.45, 0.0), pt(-0.12, 0.33)], egui::Stroke::new(2.0, egui::Color32::WHITE));
+    p.line_segment([pt(-0.12, 0.33), pt(0.48, -0.3)], egui::Stroke::new(2.0, egui::Color32::WHITE));
+    response
+}
+
 fn game_row(ui: &mut egui::Ui, i: usize, dump: &Dump, building: bool, actions: &mut Vec<Action>) {
     // Green for a dump known to work (or just converted); red for one the
     // last build left off, or one LeapLoader doesn't know.
     let (state, color, hover) = match &dump.outcome {
         Some(Outcome::Ok(what)) => (Mark::Ok, ACCENT, format!("On the card: {what}")),
         Some(Outcome::Skip(why)) => (Mark::Skip, SKIP_RED, format!("Left off the card: {why}")),
+        None if dump.homebrew => {
+            (Mark::Ok, ACCENT, "Homebrew: an app made for the Leapster 2, put on the card as it is".to_string())
+        }
         None if dump.tested() => (
             Mark::Ok,
             ACCENT,
@@ -682,8 +701,9 @@ fn game_row(ui: &mut egui::Ui, i: usize, dump: &Dump, building: bool, actions: &
                             // The name, then its tags on the same line (as Ribbit's
                             // library); the name is what shortens when they don't fit.
                             ui.horizontal(|ui| {
+                                let check_w = if dump.homebrew { HOMEBREW_CHECK + 6.0 } else { 0.0 };
                                 let tags_w: f32 = dump.tags.iter().map(|t| badge_width(ui, t) + 8.0).sum();
-                                let name_w = (ui.available_width() - tags_w).max(60.0);
+                                let name_w = (ui.available_width() - tags_w - check_w).max(60.0);
                                 ui.scope(|ui| {
                                     ui.set_max_width(name_w);
                                     ui.add(
@@ -691,6 +711,9 @@ fn game_row(ui: &mut egui::Ui, i: usize, dump: &Dump, building: bool, actions: &
                                             .truncate(),
                                     );
                                 });
+                                if dump.homebrew {
+                                    homebrew_check(ui).on_hover_text("Homebrew");
+                                }
                                 for t in &dump.tags {
                                     badge(ui, t);
                                 }
@@ -714,6 +737,7 @@ fn game_row(ui: &mut egui::Ui, i: usize, dump: &Dump, building: bool, actions: &
                     let (word, color) = match (&dump.outcome, dump.tested(), dump.enabled) {
                         (Some(Outcome::Ok(_)), ..) => ("On the card", color),
                         (Some(Outcome::Skip(_)), ..) => ("Skipped", color),
+                        (None, true, _) if dump.homebrew => ("Homebrew", color),
                         (None, true, _) => ("Compatible", color),
                         // Switched on anyway: it goes to mkcard, which may skip it.
                         (None, false, true) => ("May be skipped", TRY_AMBER),

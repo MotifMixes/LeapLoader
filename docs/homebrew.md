@@ -4,8 +4,9 @@ LeapLoader puts homebrew apps (native programs for the Leapster 2) on the SD car
 The menu on the console lists them with a **blue check**, and so does the desktop app. An app goes
 back to the LeapLoader menu, and it saves, like every game does: **HINT + A + B held 2.5 s**.
 
-Status: VERIFIED-EMU (Ribbit emulator, BIOS 0.6, 2026-10-29) with the SDK example and the NES
-emulator port. Not yet tested on a real console. Package format version 1.
+Status: VERIFIED-EMU (Ribbit emulator, BIOS 0.6, 2026-10-29) with the SDK example and the NES,
+SNES and Game Boy emulator ports (`image=` packages, kept outside this repo: SNES uses snes9x2002,
+which is non-commercial only). Not yet tested on a real console. Package format version 1.
 
 ## A package
 
@@ -67,3 +68,5 @@ Drawing straight into VRAM (0x0300_0000) went black after button presses in the 
 SDK draws in RAM and copies each frame with uncached word stores.
 
 Not in the SDK yet: sound (see the NES port's PCM code, `pcm_start`/`pcm_isr`), touch, a font.
+`sdk/instruments.h` lists the Leapster instrument numbers (bank 0 of the community Leap-Font
+soundfont; the `89 p` program command of a LeapFrog sequence), for when the SDK gets music.

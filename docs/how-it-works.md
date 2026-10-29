@@ -23,12 +23,15 @@ Built by `research/mkcard.py [--menu leaploader|LSTR-0x00130001-000000.lfp] OUT_
 **Homebrew** (2026-10-29, VERIFIED-EMU with the NES emulator port): `mkcard.py` also takes homebrew
 package folders (any argument folder, or a folder of them, holding `app.txt`):
 ```
-app.txt     name=Title  id=Folder (1-16 of A-Z a-z 0-9 _ -)  [image=game.bin]  [author= version=]
+app.txt     name=Title  id=Folder (1-16 of A-Z a-z 0-9 _ -)  code=code.bin | [image=game.bin]  [author= version=]
+code.bin    an SDK build (docs/homebrew.md): research/hbimage.py wraps it into game.bin, with the
+            approval fields of a game on the card; or
 game.bin    a ready Leapster 2 SD image (starts "LEAP", at most 8 MiB)
 files/      optional: copied into Leapster/Apps/<id>/
 card/       optional: copied to the card's top level (files already there are kept)
 ```
 The menu lists it with the games, with a blue check at the right of its row (`menugen` `homebrew=`).
+The SDK and the API: [homebrew.md](homebrew.md).
 A homebrew goes back to the menu as the stubs do (section 3): PlayGame.lnk = the menu's path, then
 `LC_Boot("ExtStorage")`; by convention on HINT + A + B held 2.5 s.
 

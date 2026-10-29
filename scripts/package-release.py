@@ -43,7 +43,7 @@ CACHE = TARGET / "package-cache"
 # The binutils the scripts call (eestub, nativechip, streamstub: as, ld, nm, objcopy).
 ARC_TOOLS = ["as", "ld", "nm", "objcopy"]
 # mkcard.py and everything it imports (sndgen for the welcome sound, musicrender for the music).
-SCRIPTS = ["mkcard", "avm1patch", "bigimage", "biosbank2sf2", "bioscall", "eestub", "gamenames", "icongen",
+SCRIPTS = ["mkcard", "avm1patch", "bigimage", "biosbank2sf2", "bioscall", "eestub", "gamenames", "hbimage", "icongen",
            "ingame", "menugen", "musicrender", "nativechip", "pixelfont", "saveshim", "sdpack", "seqgen", "sndgen",
            "streamstub", "swfgen"]
 

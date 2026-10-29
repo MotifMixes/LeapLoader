@@ -32,3 +32,5 @@ target-*/
 .claude/
 __pycache__/
 *.pyc
+sdk/example/obj/
+sdk/example/package/

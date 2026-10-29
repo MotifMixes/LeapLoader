@@ -123,7 +123,8 @@ fn open_homebrew(path: &Path) -> anyhow::Result<Dump> {
     let get = |k: &str| m.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone()).filter(|v| !v.is_empty());
     let name = get("name").ok_or_else(|| anyhow::anyhow!("its app.txt has no name="))?;
     anyhow::ensure!(get("id").is_some(), "its app.txt has no id=");
-    let image = path.join(get("image").unwrap_or_else(|| "game.bin".into()));
+    // An SDK build's code.bin (code=), else a ready SD image (image=, default game.bin).
+    let image = path.join(get("code").or_else(|| get("image")).unwrap_or_else(|| "game.bin".into()));
     anyhow::ensure!(image.is_file(), "{} is missing", image.display());
     let mut tags = Vec::new();
     if let Some(v) = get("version") {

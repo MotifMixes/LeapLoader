@@ -36,6 +36,7 @@ import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gamenames  # noqa: E402
+import hbimage  # noqa: E402
 import icongen  # noqa: E402
 import menugen  # noqa: E402
 import sdpack  # noqa: E402
@@ -173,13 +174,20 @@ def copy_tree(src, dst, keep_existing=False):
 
 def add_homebrew(out_dir, pkg, used):
     """Puts a homebrew package on the card: its image as Leapster/Apps/<id>/game.bin, files/ into that
-    folder, card/ at the card's top (files already there are kept). Returns (title, menu path)."""
+    folder, card/ at the card's top (files already there are kept). Returns (title, menu path, code):
+    an SDK build gives code= (code.bin, sdk/): its game.bin is then written again by finish_homebrew,
+    with the approval fields of a game on the card."""
     m = read_manifest(pkg)
-    image = open(os.path.join(pkg, m["image"]), "rb").read()
-    if len(image) > 0x80_0000:
-        raise ValueError(f"{m['image']} is larger than 8 MiB")
-    if image[:4] != b"LEAP":
-        raise ValueError(f"{m['image']} is not a Leapster 2 SD image (build it with the SDK's mkimage)")
+    code = None
+    if m.get("code"):
+        code = open(os.path.join(pkg, m["code"]), "rb").read()
+        image = hbimage.build(code, None, m["name"])  # (checks the size)
+    else:
+        image = open(os.path.join(pkg, m["image"]), "rb").read()
+        if len(image) > 0x80_0000:
+            raise ValueError(f"{m['image']} is larger than 8 MiB")
+        if image[:4] != b"LEAP":
+            raise ValueError(f"{m['image']} is not a Leapster 2 SD image (or give code= for an SDK build)")
     if m["id"].lower() in used:
         raise ValueError(f"another game on the card already uses the folder {m['id']}")
     d = os.path.join(out_dir, "Leapster", "Apps", m["id"])
@@ -192,22 +200,31 @@ def add_homebrew(out_dir, pkg, used):
     open(os.path.join(d, "meta.inf"), "wb").write(meta_inf(m["name"], m["id"], image))
     open(os.path.join(d, "icon.swf"), "wb").write(icongen.build_icon(m["name"]))
     used.add(m["id"].lower())
-    return m["name"], f"{m['id']}\\game.bin"
+    return m["name"], f"{m['id']}\\game.bin", code
+
+
+def finish_homebrew(out_dir, title, path, code, approval):
+    """game.bin of an SDK build: its code.bin in an image with `approval` (swfgen.approval_fields)."""
+    with open(os.path.join(out_dir, "Leapster", "Apps", *path.split("\\")), "wb") as f:
+        f.write(hbimage.build(code, approval, title))
 
 
 def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loop=0.0, console="drums", short="",
           floor="", bios=None, homebrew=()):
     games, used, approval = [], {"leaploader"}, None  # (LeapLoader\home.txt: menugen.HOME_PATH)
-    brewed = set()
+    brewed, pending = set(), []
     for pkg in homebrew:
+        label = os.path.basename(os.path.normpath(pkg))
         try:
-            title, path = add_homebrew(out_dir, pkg, used)
+            title, path, code = add_homebrew(out_dir, pkg, used)
         except (OSError, ValueError) as e:
-            print(f"skip  {os.path.basename(os.path.normpath(pkg))}: homebrew: {e}")
+            print(f"skip  {label}: homebrew: {e}")
             continue
         games.append((title, path))
         brewed.add(path)
-        print(f"ok    {os.path.basename(os.path.normpath(pkg))} -> Leapster/Apps/{path.split(chr(92))[0]} ({title}, homebrew)")
+        if code is not None:
+            pending.append((title, path, code))
+        print(f"ok    {label} -> Leapster/Apps/{path.split(chr(92))[0]} ({title}, homebrew)")
     menu_name = "LeapLoader" if menu == "leaploader" else "SD Menu"  # named by the HINT + A + B prompt
     for path in dumps:
         image = open(path, "rb").read()
@@ -257,6 +274,10 @@ def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loo
         open(os.path.join(d, "icon.swf"), "wb").write(icongen.build_icon(title))
         games.append((title, f"{folder}\\game.bin"))
         print(f"ok    {label} -> Leapster/Apps/{folder} ({title}){note}")
+    for title, path, code in pending:
+        if approval is None:
+            raise SystemExit(f"{title}: a homebrew app built with the SDK needs a cartridge game on the same card")
+        finish_homebrew(out_dir, title, path, code, approval)
     if not games:
         raise SystemExit("no supported games: nothing to put on the card")
     d = os.path.join(out_dir, "Leapster", "System", "SDMenu")

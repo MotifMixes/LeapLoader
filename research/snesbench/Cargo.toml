@@ -1,0 +1,17 @@
+[package]
+name = "snesbench"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Research tool: runs a bare ARC program on Ribbit's CPU with its calibrated cache and pipeline timing, and reports Leapster 2 cycles between the program's frame markers (the SNES emulator speed budget)"
+
+# Standalone, like nativescan: needs a local Ribbit checkout next to LeapLoader.
+[workspace]
+
+[dependencies]
+ribbit-core = { path = "../../../Ribbit/crates/ribbit-core" }
+ribbit-cpu = { path = "../../../Ribbit/crates/ribbit-cpu" }
+ribbit-memory = { path = "../../../Ribbit/crates/ribbit-memory" }
+
+[profile.release]
+debug = 1

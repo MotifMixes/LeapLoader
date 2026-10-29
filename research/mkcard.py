@@ -3,7 +3,7 @@
 Usage: python mkcard.py [--menu leaploader|MENU.lfp|SDMenu.bin] [--music SONG.mid] [--music-loop SECONDS]
                         [--console drums,PROGRAM,...] [--short PROGRAM,...] [--floor PROGRAM:VELOCITY,...]
                         [--welcome SOUND|none] [--bios LEAPSTER2_BIOS.bin]
-                        OUT_DIR DUMP.bin|FOLDER [...]
+                        OUT_DIR DUMP.bin|FOLDER|HOMEBREW_FOLDER [...]
 (--welcome: the sound LeapLoader's menu plays when it starts; default assets/welcome.alaw, made from welcome.mp3)
 (--music: background music for LeapLoader's menu: a MIDI file whose track names are BIOS program
  numbers, rendered with the BIOS's instruments into a looping clip, musicrender.py; --music-loop: where
@@ -135,9 +135,79 @@ def music_bios_problem(bios):
     return None
 
 
+HOMEBREW_MANIFEST = "app.txt"
+
+
+def is_homebrew(path):
+    """A homebrew package: a folder with app.txt (docs/homebrew.md)."""
+    return os.path.isfile(os.path.join(path, HOMEBREW_MANIFEST))
+
+
+def read_manifest(pkg):
+    """app.txt: `key=value` lines (# comments); name and id are required."""
+    m = {}
+    for line in open(os.path.join(pkg, HOMEBREW_MANIFEST), encoding="utf-8-sig"):
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            m[k.strip().lower()] = v.strip()
+    for k in ("name", "id"):
+        if not m.get(k):
+            raise ValueError(f"{HOMEBREW_MANIFEST} has no {k}=")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,16}", m["id"]):
+        raise ValueError("id= must be 1-16 letters, digits, _ or -")
+    m.setdefault("image", "game.bin")
+    return m
+
+
+def copy_tree(src, dst, keep_existing=False):
+    """Copies the folder src into dst (files only; keep_existing: never replace a file)."""
+    import shutil
+    for root, _, files in os.walk(src):
+        d = os.path.join(dst, os.path.relpath(root, src))
+        os.makedirs(d, exist_ok=True)
+        for f in files:
+            if not (keep_existing and os.path.exists(os.path.join(d, f))):
+                shutil.copyfile(os.path.join(root, f), os.path.join(d, f))
+
+
+def add_homebrew(out_dir, pkg, used):
+    """Puts a homebrew package on the card: its image as Leapster/Apps/<id>/game.bin, files/ into that
+    folder, card/ at the card's top (files already there are kept). Returns (title, menu path)."""
+    m = read_manifest(pkg)
+    image = open(os.path.join(pkg, m["image"]), "rb").read()
+    if len(image) > 0x80_0000:
+        raise ValueError(f"{m['image']} is larger than 8 MiB")
+    if image[:4] != b"LEAP":
+        raise ValueError(f"{m['image']} is not a Leapster 2 SD image (build it with the SDK's mkimage)")
+    if m["id"].lower() in used:
+        raise ValueError(f"another game on the card already uses the folder {m['id']}")
+    d = os.path.join(out_dir, "Leapster", "Apps", m["id"])
+    os.makedirs(d, exist_ok=True)
+    open(os.path.join(d, "game.bin"), "wb").write(image)
+    if os.path.isdir(os.path.join(pkg, "files")):
+        copy_tree(os.path.join(pkg, "files"), d)
+    if os.path.isdir(os.path.join(pkg, "card")):
+        copy_tree(os.path.join(pkg, "card"), out_dir, keep_existing=True)
+    open(os.path.join(d, "meta.inf"), "wb").write(meta_inf(m["name"], m["id"], image))
+    open(os.path.join(d, "icon.swf"), "wb").write(icongen.build_icon(m["name"]))
+    used.add(m["id"].lower())
+    return m["name"], f"{m['id']}\\game.bin"
+
+
 def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loop=0.0, console="drums", short="",
-          floor="", bios=None):
+          floor="", bios=None, homebrew=()):
     games, used, approval = [], {"leaploader"}, None  # (LeapLoader\home.txt: menugen.HOME_PATH)
+    brewed = set()
+    for pkg in homebrew:
+        try:
+            title, path = add_homebrew(out_dir, pkg, used)
+        except (OSError, ValueError) as e:
+            print(f"skip  {os.path.basename(os.path.normpath(pkg))}: homebrew: {e}")
+            continue
+        games.append((title, path))
+        brewed.add(path)
+        print(f"ok    {os.path.basename(os.path.normpath(pkg))} -> Leapster/Apps/{path.split(chr(92))[0]} ({title}, homebrew)")
     menu_name = "LeapLoader" if menu == "leaploader" else "SD Menu"  # named by the HINT + A + B prompt
     for path in dumps:
         image = open(path, "rb").read()
@@ -223,7 +293,8 @@ def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loo
         data, meta = menugen.build_menu(sorted(games, key=lambda g: g[0].lower()), approval, music=seq,
                                         welcome=pcm, music_loop=music_loop,
                                         music_seq=info.get("sequence") if music else None,
-                                        seq_volume=musicrender.SEQ_VOLUME if music else None), None
+                                        seq_volume=musicrender.SEQ_VOLUME if music else None,
+                                        homebrew=brewed), None
         what = (f"LeapLoader menu, {len(games)} games" + (", with music" if seq else "")
                 + (f", welcome sound {len(pcm) / sndgen.ALAW_RATE:.1f} s" if pcm else ""))
     else:
@@ -262,11 +333,14 @@ if __name__ == "__main__":
         else:
             music = args[1]
         args = args[2:]
-    paths = []
+    paths, brew = [], []
     for a in args[1:]:
-        if os.path.isdir(a):
+        if os.path.isdir(a) and is_homebrew(a):
+            brew.append(a)
+        elif os.path.isdir(a):
+            brew += sorted(os.path.join(a, f) for f in os.listdir(a) if is_homebrew(os.path.join(a, f)))
             paths += sorted(os.path.join(a, f) for f in os.listdir(a) if f.lower().endswith(".bin"))
         else:
             paths.append(a)
     build(args[0], paths, menu, music, welcome if welcome and os.path.exists(welcome) else None, music_loop, console,
-          short, floor, bios)
+          short, floor, bios, brew)

@@ -24,7 +24,7 @@
 //!                         btn NAME [MS] | shot NAME | save STATE | load STATE | card (rewrite the
 //!                         add the --put/--text files to the card, e.g. after load) | ls (card files) | power (power cycle) | trace PC | cat CARDPATH | hold NAME | release NAME | export RIBBIT_SDCARD.img | b008 HEX | say TEXT (shown
 //!                         in the window title) | wait (keep the window open until closed) | play (interactive until closed: arrows,
-//!                         Enter/Z = A, X = B, H = Hint, Esc = Home, mouse = stylus)
+//!                         Enter/Z = A, X = B, H = Hint, P = Pause, Esc = Home, mouse = stylus)
 //!     --view              show the LCD live in a window, paced to real time
 //!
 //! Nothing here is LeapLoader's product code; it exists to answer the
@@ -623,7 +623,8 @@ fn main() {
                             }
                         }
                         let n = num(2, 8) as u32;
-                        println!("  mem {} = {a:08x} (gp {:08x}):", w[1], m.cpu.regs[26]);
+                        println!("  mem {} = {a:08x} (gp {:08x}, cache misses i/d/wb {:?}, cycles {}):", w[1], m.cpu.regs[26],
+                                 m.io.mem.misses, m.cpu.cycles);
                         for r in (0..n).step_by(8) {
                             let words: Vec<String> = (r..(r + 8).min(n)).map(|k| format!("{:08x}", peek32(a + 4 * k))).collect();
                             println!("    {:08x}: {}", a + 4 * r, words.join(" "));
@@ -713,7 +714,8 @@ fn main() {
         let mut v: Vec<_> = samples.into_iter().collect();
         v.sort_by(|a, b| b.1.cmp(&a.1));
         println!("hottest PCs ({total} samples):");
-        for (pc, n) in v.into_iter().take(25) {
+        let top = std::env::var("SDBOOT_PROFILE_TOP").ok().and_then(|s| s.parse().ok()).unwrap_or(25);
+        for (pc, n) in v.into_iter().take(top) {
             println!("  {pc:08x}  {:5.1}%", 100.0 * n as f64 / total as f64);
         }
     }

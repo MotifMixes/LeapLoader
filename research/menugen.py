@@ -153,6 +153,20 @@ ICON_UP = [
     "....####....",
 ]
 ICON_DOWN = ICON_UP[::-1]
+# Homebrew badge (blue disc "B", white check "W"), right end of a homebrew game's row.
+BADGE = [
+    "...BBBB...",
+    ".BBBBBBBB.",
+    ".BBBBBBWB.",
+    "BBBBBBWWBB",
+    "BBWBBWWBBB",
+    "BBWWWWBBBB",
+    ".BBWWBBBB.",
+    ".BBBBBBBB.",
+    "...BBBB...",
+]
+BADGE_BLUE = 0x1D9BF0
+BADGE_X = PILL_X + ROW_W - 4 - len(BADGE[0])
 
 SPARKLES = [(12, 6), (58, 3), (97, 9), (148, 4), (30, 52), (152, 60), (4, 88), (156, 110), (6, 128), (80, 50),
             (118, 2), (40, 12)]
@@ -170,6 +184,7 @@ ID_ABOUT, ID_KEYBOARD, ID_KEY, ID_KEY_WIDE, ID_KEY_OK, ID_KEY_GLOW, ID_KEY_GLOW_
 ID_CURSOR, ID_TOOL_GLOW = 98, 99
 ID_TOOL_BOX, ID_TOOL_HIT, ID_TOOL_SEARCH, ID_TOOL_UP, ID_TOOL_DOWN = 100, 101, 102, 103, 104
 ID_BTN_SEARCH, ID_BTN_UP, ID_BTN_DOWN, ID_SPR_SEARCH, ID_SPR_UP, ID_SPR_DOWN = 105, 106, 107, 108, 109, 110
+ID_BADGE, ID_TEXT_MASK_HB = 111, 112
 TEXT_BASE = 200     # static texts of the overlays, allocated upwards (below 1000)
 ROW_TEXT_BASE, ROW_INNER, ROW_MASKED, ROW_BUTTON, ROW_SPRITE = 1000, 3000, 5000, 7000, 9000
 GLYPH_TEXT_LIGHT, GLYPH_TEXT_DARK = 11000, 11100
@@ -353,8 +368,9 @@ def music_parts(music, loop_start):
 
 
 def build_menu(games, approval, version=VERSION, music=None, welcome=None, music_loop=0.0, music_seq=None,
-               seq_volume=None):
-    """`welcome`: an 8 kHz A-law clip (sndgen.load_alaw) played once when the menu starts.
+               seq_volume=None, homebrew=()):
+    """`homebrew`: the paths (games' second fields) of homebrew apps; their rows get the blue check.
+    `welcome`: an 8 kHz A-law clip (sndgen.load_alaw) played once when the menu starts.
     `music`: an 8 kHz A-law clip (musicrender.render) played from its start, then looped from
     `music_loop` seconds. `music_seq`: the parts the console plays with it (musicrender's
     report["sequence"], the drums), started with the clip by LF_PlayBgMIDI at LF_SetBgMIDIVolume
@@ -407,6 +423,11 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
         tags.append(define_sprite(sprite_id, [place(1, ID_TOOL_BOX, 0, 0), place(2, icon_id, 0, 0),
                                               place(3, button_id, 0, 0), show_frame()]))
     tags.append(define_shape_layers(ID_TEXT_MASK, [(0x000000, [(PILL_X + TEXT_X, 0, AVAIL, PILL_H)])]))
+    tags.append(define_shape_layers(ID_TEXT_MASK_HB, [(0x000000, [(PILL_X + TEXT_X, 0, BADGE_X - 2 - PILL_X - TEXT_X,
+                                                                     PILL_H)])]))
+    by = (PILL_H - len(BADGE)) // 2
+    tags.append(define_shape_layers(ID_BADGE, [(BADGE_BLUE, bitmap_rects(BADGE, "B", 1, BADGE_X, by)),
+                                               (0xFFFFFF, bitmap_rects(BADGE, "W", 1, BADGE_X, by))]))
     # Header: title, then "My Games: <count>" or "Search:" + the search text.
     title_text = ids.take(2)
     tags += shadowed_text(title_text, [(4, 22, "LeapLoader")], TITLE, TITLE_SHADOW, scale=2, offset=2)
@@ -437,17 +458,19 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
 
     # Rows: each a sprite r{i} (pill, title masked to the pill with marquee clip "m/t", touch button).
     list_tags = [place(1, ID_HI, 0, 0, name="hi")]
-    for i, (title, _) in enumerate(games):
+    for i, (title, path) in enumerate(games):
+        hb = path in homebrew
         tid = ROW_TEXT_BASE + 2 * i
         tags += shadowed_text(tid, [(0, 14, title)], ROW_TEXT, ROW_SHADOW)
         tags.append(define_sprite(ROW_INNER + i, [place(1, tid, 0, 0), place(2, tid + 1, 0, 0), show_frame()]))
-        tags.append(define_sprite(ROW_MASKED + i, [place(1, ID_TEXT_MASK, 0, 0, clip_depth=3),
+        tags.append(define_sprite(ROW_MASKED + i, [place(1, ID_TEXT_MASK_HB if hb else ID_TEXT_MASK, 0, 0, clip_depth=3),
                                                    place(2, ROW_INNER + i, PILL_X + TEXT_X, 0, name="t"), show_frame()]))
         press = AS().push(i, 1).getvar("_root").push("tap").op("callmethod").op("pop")
         tags.append(define_button(ROW_BUTTON + i, ID_PILL_HIT, press))
         tags.append(define_sprite(ROW_SPRITE + i, [place(1, ID_PILL_BACK, 0, 0), place(2, ID_PILL_FILL, 0, 0),
                                                    place(3, ID_PILL_SHINE, 0, 0), place(4, ROW_MASKED + i, 0, 0, name="m"),
-                                                   place(5, ROW_BUTTON + i, 0, 0), show_frame()]))
+                                                   place(5, ROW_BUTTON + i, 0, 0)]
+                                  + ([place(6, ID_BADGE, 0, 0)] if hb else []) + [show_frame()]))
         list_tags.append(place(10 + i, ROW_SPRITE + i, 0, i * PITCH, name=f"r{i}"))
     list_tags.append(show_frame())
     tags.append(define_sprite(ID_HI, [place(1, ID_GLOW, 0, 0), show_frame()]))

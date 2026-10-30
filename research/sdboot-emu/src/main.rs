@@ -486,7 +486,9 @@ fn main() {
         }
         i += 2;
     }
-    if logs.is_empty() {
+    // (Logs are breakpoints, and breakpoints turn off batches and the JIT:
+    // SDBOOT_FAST=1 runs as the Ribbit app does, without the default log.)
+    if logs.is_empty() && std::env::var("SDBOOT_FAST").is_err() {
         logs = vec![(0x4004_2F98, 0)];
     }
     std::fs::create_dir_all(&out).unwrap();
@@ -542,6 +544,14 @@ fn main() {
                         m.io.touch.as_mut().unwrap().live = None;
                         ses.advance_ms(&mut m, 300);
                     }
+                    // `pen X Y`: the stylus down at LCD pixel (X, Y) until `penup`.
+                    Some("pen") => {
+                        let raw = |p: u64| ((p as u32 * 0x7F0 + 79) / 159).min(0x7F0);
+                        m.io.touch.as_mut().unwrap().live = Some((raw(num(1, 0)), raw(num(2, 0))));
+                    }
+                    Some("penup") => m.io.touch.as_mut().unwrap().live = None,
+                    // `ram FILE`: RAM as it is now, to a file.
+                    Some("ram") => std::fs::write(out.join(w[1]), m.bus.ram()).expect("write ram"),
                     Some("btn") => {
                         let b = ribbit_input::Button::from_name(w[1]).expect("button name");
                         m.buttons.set(b, true);
@@ -762,6 +772,22 @@ fn main() {
         if ee.cart.is_some() { "present" } else { "absent" }
     );
     println!("final pc {:08x}, B008 {:#x}, restarts {}", m.cpu.pc, m.io.leapster2_power.unwrap()[1], m.restarts);
+    println!("batch conditions: record_trace_tail {} trace_sink {} coverage {} record_last {}", m.record_trace_tail, m.trace_sink.is_some(), m.coverage.is_some(), m.cpu.record_last);
+    if let Some(j) = &m.jit {
+        let s = &j.stats;
+        println!(
+            "jit: {} of {} instructions compiled ({:.1}%), {} blocks compiled, {} fallbacks, {} interpreted blocks, {} jit batches; RAM code flushes {}; machine batches {:?}",
+            s.instructions,
+            m.cpu.instructions_retired,
+            s.instructions as f64 * 100.0 / m.cpu.instructions_retired.max(1) as f64,
+            s.compiled,
+            s.fallbacks,
+            s.interpreted,
+            s.batches,
+            m.ram_code_flushes,
+            m.batch_stats
+        );
+    }
     if let Some(sd) = m.io.sd.as_ref() {
         let hc = sd.card.as_ref().is_some_and(|c| c.hc);
         let rw: Vec<_> = sd.log.iter().filter(|l| l.0 == 17 || l.0 == 24).collect();

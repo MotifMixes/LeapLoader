@@ -19,9 +19,11 @@
 //!   0x0180_FF20 read32: the CPU cycle count (low 32 bits), for frame pacing
 //!   in the current folder (NNNNN = frames so far)
 //! Cycles are at 96 MHz, the nominal clock (Ribbit's `NOMINAL_CPU_HZ`).
+//! A write to IC_IVIC (aux 0x10) empties the modelled code cache, as on the
+//! console (SNESBENCH_NO_IVIC=1: ignored, as before 2026-10-29).
 
 use ribbit_core::io::memtiming::MemTiming;
-use ribbit_cpu::{Cpu, CpuConfig};
+use ribbit_cpu::{AuxExt, Cpu, CpuConfig};
 use ribbit_memory::Bus;
 use std::io::Write;
 
@@ -36,6 +38,26 @@ const EXIT: u32 = 0x0180_FF08;
 const SHOT: u32 = 0x0180_FF0C;
 const CLOCK: u32 = 0x0180_FF20;
 const HZ: f64 = 96_000_000.0;
+
+/// The cache-maintenance aux registers: IC_IVIC (0x10, noted for the caller
+/// to empty the code cache), DC_FLDL (0x4C) and DC_CTRL (0x48, flush done).
+struct CacheAux {
+    ivic: bool,
+}
+
+impl AuxExt for CacheAux {
+    fn aux_read(&mut self, reg: u32) -> Option<u32> {
+        (reg == 0x48).then_some(0)
+    }
+    fn aux_write(&mut self, reg: u32, _: u32) -> bool {
+        match reg {
+            0x10 => self.ivic = true,
+            0x4C => {}
+            _ => return false,
+        }
+        true
+    }
+}
 
 struct Flat {
     ram: Vec<u8>,
@@ -211,15 +233,23 @@ fn main() {
     let mut cpu = Cpu::new(CpuConfig::leapster());
     cpu.reset();
     cpu.pc = base;
+    let model_ivic = std::env::var("SNESBENCH_NO_IVIC").is_err();
+    let mut aux = CacheAux { ivic: false };
     let wall = std::time::Instant::now();
     let (mut last, mut last_instr, mut frames, mut total) = (0u64, 0u64, 0u64, Vec::new());
     let mut by_pc: std::collections::HashMap<u32, u64> = std::collections::HashMap::new();
     loop {
         let (pc, before, mb) = (cpu.pc, cpu.cycles, bus.mem.misses[miss_kind.min(2)]);
         bus.clock = cpu.cycles;
-        if let Err(e) = cpu.step(&mut bus) {
+        if let Err(e) = cpu.step_with(&mut bus, &mut aux) {
             eprintln!("CPU stopped: {e:?}\n{cpu:?}");
             std::process::exit(2);
+        }
+        if aux.ivic {
+            aux.ivic = false;
+            if model_ivic {
+                bus.mem.invalidate_code();
+            }
         }
         if profile.is_some() && frames > 0 {
             *by_pc.entry(pc).or_default() +=
@@ -269,6 +299,11 @@ fn main() {
         pcs.sort_by(|a, b| b.1.cmp(a.1));
         for (pc, c) in pcs.iter().take(60) {
             println!("PROFILE-PC {:5.2}% {pc:08x}", **c as f64 * 100.0 / all as f64);
+        }
+        // SNESBENCH_PCDUMP=FILE: every address with its count ("pc count" lines).
+        if let Ok(path) = std::env::var("SNESBENCH_PCDUMP") {
+            let text: String = pcs.iter().map(|(pc, c)| format!("{pc:08x} {c}\n")).collect();
+            std::fs::write(path, text).unwrap();
         }
     }
     let _ = std::io::stdout().flush();

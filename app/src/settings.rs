@@ -23,6 +23,8 @@ pub enum Menu {
 pub struct Settings {
     /// The dumps on the list, kept for next time.
     pub dumps: Vec<PathBuf>,
+    /// The bundled emulators (emulators.rs) put on the list once already, by id.
+    pub emulators_added: Vec<String>,
     /// Dumps on the list but not chosen for the card.
     pub unselected: Vec<PathBuf>,
     /// Incompatible dumps the user switched on anyway (they start off).
@@ -59,6 +61,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             dumps: Vec::new(),
+            emulators_added: Vec::new(),
             unselected: Vec::new(),
             try_anyway: Vec::new(),
             dumps_folder: None,

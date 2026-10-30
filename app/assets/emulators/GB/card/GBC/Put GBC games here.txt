@@ -1,0 +1,1 @@
+Put Game Boy Color games (.gbc) here.

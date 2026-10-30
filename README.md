@@ -9,6 +9,10 @@ on real hardware. LeapLoader is licensed under the GPL-3.0-or-later (see [LICENS
 
 **→ [User guide](docs/manual/01-welcome.md)**: every button and screen, step by step
 
+**→ NES and Game Boy**: LeapLoader 0.2.4 comes with NES and Game Boy / Color emulators for the Leapster 2
+([LeapLoader-Emulators](https://github.com/MotifMixes/LeapLoader-Emulators)); bring your own `.nes`, `.gb` and
+`.gbc` files. Homebrew of your own: the [SDK](docs/homebrew.md) (a download with every release).
+
 > [!CAUTION]
 > **On a Leapster Connected console (BIOS B5, 152-12076), use LeapLoader 0.2.1 or later.** With 0.2.0 and earlier,
 > a game from a LeapLoader card can get stuck on its loading screen on a B5 console and **scramble the SD card's
@@ -127,6 +131,7 @@ binutils from Ribbit's `tools/arc-gnu`; Linux and macOS build them with `scripts
 ## Documentation
 
 * [User guide](docs/manual/01-welcome.md) and [compatible games](docs/compatibility.md)
+* [Homebrew and the SDK](docs/homebrew.md); the emulators: [LeapLoader-Emulators](https://github.com/MotifMixes/LeapLoader-Emulators)
 * [How it works](docs/how-it-works.md): the card, the menus, HINT + A + B, saves, converting a cartridge, games
   over 8 MiB
 * [Games](docs/games.md): per-game research notes

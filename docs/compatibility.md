@@ -1,7 +1,7 @@
 # Compatible games
 
 Which Leapster games LeapLoader can put on a Leapster 2's SD card, and how far each one has been tested.
-Last updated 2026-10-28 (LeapLoader 0.2.3).
+Last updated 2026-10-30 (LeapLoader 0.2.4).
 
 > [!WARNING]
 > **Nothing has been tested on a real Leapster 2 yet.** Every result below comes from the

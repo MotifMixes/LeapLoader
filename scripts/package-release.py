@@ -2,7 +2,8 @@
 scripts/package-release.py, package-linux.py and package-mac.py).
 
 Run:    python -I scripts/package-release.py [--skip-build]          (Windows, Linux, macOS)
-Output: <target>/dist/LeapLoader-<version>-<system>.<zip|tar.gz>
+Output: <target>/dist/LeapLoader-<version>-<system>.<zip|tar.gz>; on Windows also
+        LeapLoader-SDK-<version>.zip (the homebrew SDK, sdk/)
         windows-x64.zip, linux-x64.tar.gz, macos-arm64.zip or macos-x64.zip (the Mac it runs on)
         (<target>: $LEAPLOADER_TARGET, default D:/leaploader-tmp/target-release on Windows,
         ~/.cache/leaploader/target-release on Linux, target/ in the repository on macOS)
@@ -305,6 +306,33 @@ def personal_info(stage):
     return found
 
 
+def sdk_zip(ver):
+    """The homebrew SDK as its own download (every release brings it; user, 2026-10-30):
+    LeapLoader-SDK-<ver>.zip, the git-tracked files of sdk/ (no build output) in a folder
+    LeapLoader-SDK, with docs/homebrew.md as its README.md. Checked like the packages."""
+    files = subprocess.run(["git", "ls-files", "sdk"], cwd=ROOT, capture_output=True, text=True,
+                           check=True).stdout.split()
+    stage = DIST / "sdk-stage"
+    shutil.rmtree(stage, ignore_errors=True)
+    for f in files:
+        dest = stage / "LeapLoader-SDK" / Path(f).relative_to("sdk")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / f, dest)
+    shutil.copyfile(ROOT / "docs" / "homebrew.md", stage / "LeapLoader-SDK" / "README.md")
+    bad = personal_info(stage)
+    if bad:
+        raise SystemExit("personal or development paths in the SDK: " + ", ".join(f"{f} ({n})" for f, n in bad))
+    out = DIST / f"LeapLoader-SDK-{ver}.zip"
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for f in sorted(p for p in stage.rglob("*") if p.is_file()):
+            info = zipfile.ZipInfo(f.relative_to(stage).as_posix(),
+                                   date_time=time.gmtime(max(f.stat().st_mtime, 315532800))[:6])
+            info.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(info, f.read_bytes(), compresslevel=9)
+    shutil.rmtree(stage)
+    print(f"{out} ({out.stat().st_size // 1024} KiB)")
+
+
 def crlf(text):
     return text.replace("\r\n", "\n").replace("\n", "\r\n") if SYSTEM == "windows" else text
 
@@ -407,6 +435,8 @@ def main():
                 info.compress_type = zipfile.ZIP_DEFLATED
                 z.writestr(info, f.read_bytes(), compresslevel=9)
     print(f"{out} ({out.stat().st_size // 1024} KiB)")
+    if SYSTEM == "windows":  # (once per release: with the Windows package)
+        sdk_zip(version())
 
 
 if __name__ == "__main__":

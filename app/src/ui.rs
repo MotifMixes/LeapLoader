@@ -661,6 +661,8 @@ fn game_row(ui: &mut egui::Ui, i: usize, dump: &Dump, building: bool, actions: &
                 .to_string(),
         ),
     };
+    // Homebrew is blue, as its buttons on the card's menu (unless the build left it off).
+    let color = if dump.homebrew && matches!(state, Mark::Ok) { HOMEBREW_BLUE } else { color };
     let edge = color.gamma_multiply(0.55);
     let fill = CARD.lerp_to_gamma(color, 0.07);
     // Selected (Ctrl+click, Shift+click): a purple edge and tint.
@@ -693,7 +695,10 @@ fn game_row(ui: &mut egui::Ui, i: usize, dump: &Dump, building: bool, actions: &
                         |ui| {
                             ui.set_width(left);
                             ui.spacing_mut().item_spacing.y = 2.0;
-                            let name_color = if state == Mark::Ok {
+                            let name_color = if state == Mark::Ok && dump.homebrew {
+                                // light blue, as the light green of a game's name
+                                egui::Color32::from_rgb(140, 205, 250)
+                            } else if state == Mark::Ok {
                                 egui::Color32::from_rgb(150, 235, 165)
                             } else {
                                 egui::Color32::WHITE

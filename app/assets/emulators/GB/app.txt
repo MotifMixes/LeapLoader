@@ -1,0 +1,5 @@
+name=Game Boy
+id=GB
+code=code.bin
+author=LeapLoader-Emulators (gnuboy, GPL-2)
+version=1.0.0

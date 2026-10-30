@@ -14,6 +14,7 @@
 
 mod app;
 mod card;
+mod emulators;
 mod files;
 mod fonts;
 mod gamenames;

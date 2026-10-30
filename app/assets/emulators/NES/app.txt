@@ -1,0 +1,5 @@
+name=NES
+id=NES
+code=code.bin
+author=LeapLoader-Emulators (QuickNES, LGPL-2.1)
+version=1.0.0

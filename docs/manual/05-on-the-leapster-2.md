@@ -64,6 +64,12 @@ The game writes its save, and the console restarts into the menu on the card. On
 
 On some screens the game can't show its prompt (name entry, videos). Keep holding there: after about 4 seconds LeapLoader takes you back to the menu anyway.
 
+## NES and Game Boy
+
+The emulators are the **blue buttons** in the menu. Each opens a list of the games in its folder on the card (`NES`, or `GB` and `GBC`), drawn like LeapLoader's menu: Up/Down choose, Left/Right change page, **A** or a touch starts a game, **PAUSE** or the magnifying glass searches, **HOME** goes back to LeapLoader's menu.
+
+In a game: the D-pad is the D-pad, **A** is the console's B button and **B** its A button, **PAUSE** is Start, **HINT** is Select, and the volume buttons set the volume. **HINT + A + B** held 2.5 s (a bar fills) goes back to the emulator's list, and so does **HOME + PAUSE** held 2 s. Battery saves are written next to the game (`GAME.sav`).
+
 ## Saves
 
 Each game saves as it would on its cartridge, but into a file in its folder on the card: `save.dat` or `save.bin`, made the first time it saves. Holding HINT + A + B writes any save still waiting before it leaves the game.

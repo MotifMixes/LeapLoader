@@ -25,6 +25,9 @@ The badge on the right says what LeapLoader thinks of the dump:
 | **May be skipped** (amber) | An incompatible dump you switched on anyway |
 | **On the card** | After a build: the game was put on the card |
 | **Skipped** | After a build: the game was left off. Point at the badge to see why |
+| **Homebrew** (blue) | An app for the Leapster 2 rather than a game dump, such as the NES and Game Boy emulators LeapLoader comes with |
+
+**NES** and **Game Boy** are on the list from the start: they are emulators that come with LeapLoader. Leave them on and build the card, then copy your own `.nes` files into the card's `NES` folder and `.gb` / `.gbc` files into `GB` and `GBC`. Take them off the list if you don't want them; they won't come back.
 
 The heading says how many games are on the card, for example **12 of 75 on the card**, and how many dumps are incompatible.
 

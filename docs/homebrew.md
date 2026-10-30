@@ -1,12 +1,22 @@
 # Homebrew for LeapLoader
 
 LeapLoader puts homebrew apps (native programs for the Leapster 2) on the SD card next to the games.
-The menu on the console lists them with a **blue check**, and so does the desktop app. An app goes
+The menu on the console shows them as **blue buttons with a white check** (games are green), and the
+desktop app lists them in blue. An app goes
 back to the LeapLoader menu, and it saves, like every game does: **HINT + A + B held 2.5 s**.
 
 Status: VERIFIED-EMU (Ribbit emulator, BIOS 0.6, 2026-10-29) with the SDK example and the NES,
 SNES and Game Boy emulator ports (`image=` packages, kept outside this repo: SNES uses snes9x2002,
 which is non-commercial only). Not yet tested on a real console. Package format version 1.
+
+## The emulators LeapLoader comes with
+
+From 0.2.4 the desktop app brings two homebrew packages and puts them on its list the first time it
+starts (taken off, they stay off): **NES** (QuickNES) and **Game Boy** (gnuboy, for `.gb` and `.gbc`).
+They are built from [LeapLoader-Emulators](https://github.com/MotifMixes/LeapLoader-Emulators) (GPL 2;
+`app/assets/emulators`, written to the app's data folder at start, `app/src/emulators.rs`), as `code=`
+packages, so the card build adds the approval fields of a game on the card. Their games go in the card's
+`NES`, `GB` and `GBC` folders. SNES and GBA ports exist but are not released.
 
 ## A package
 

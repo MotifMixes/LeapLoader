@@ -34,3 +34,6 @@ __pycache__/
 *.pyc
 sdk/example/obj/
 sdk/example/package/
+
+# the bundled emulators (built from github.com/MotifMixes/LeapLoader-Emulators; GPL 2)
+!app/assets/emulators/*/code.bin

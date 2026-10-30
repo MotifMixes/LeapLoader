@@ -157,6 +157,18 @@ impl App {
                 app.settings.try_anyway.contains(&d.path)
             };
         }
+        // The emulators LeapLoader comes with: on the list once (taken off, they stay off).
+        let mut added = false;
+        for (id, dir) in crate::emulators::install(&app.data_dir) {
+            if !app.settings.emulators_added.iter().any(|a| a == id) {
+                app.add_dumps(vec![dir], false);
+                app.settings.emulators_added.push(id.to_string());
+                added = true;
+            }
+        }
+        if added {
+            app.save_settings();
+        }
         app.look_for_menu();
         app.find_tools();
         app

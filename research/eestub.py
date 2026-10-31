@@ -55,6 +55,7 @@ KEYS_FLAG = 1 << 29
 COMBO = 0x4000 | 0x2000 | 0x1000_0000
 FALLBACK_POLLS = 400  # HINT + A + B held 4 s (one poll per 10 ms) with nothing done: back to the menu
 QUIET = 10  # calls (one a frame) without changes before the save file is written
+STALE = 100  # button polls (1 s) without a flusher call: chip writes go to the save file at once
 SYSTEM_DEVICE = 0  # the console's own memory (flash-emulated); every other device is the cartridge chip
 
 SOURCE = r"""
@@ -130,6 +131,11 @@ llee:
     bl      load
     bl      menu_lnk
 1:
+    ; the button poll's tick count now: the chip writes see how long ago the flusher last ran
+    mov     r5, ticks
+    ld      r6, [r5]
+    mov     r5, llee_tick
+    st      r6, [r5]
     ; changes since the last call: something to write, quiet calls counted from 0
     mov     r5, dirty_lo
     ld      r6, [r5]
@@ -398,6 +404,10 @@ btn_poll:
     mov     r1, 0x400f0674
     jl      [r1]
 3:
+    mov     r3, ticks               ; a clock for the chip writes (one tick per poll, 10 ms)
+    ld      r4, [r3]
+    add     r4, r4, 1
+    st      r4, [r3]
     mov     r0, r14
     add     sp, sp, 16
     ld.ab   r14, [sp, 4]
@@ -497,8 +507,7 @@ fk_write:
     brhs    r5, r10, 12f
     st      r10, [r4, 4]
 12:
-    mov     r0, 1
-    j_s     [blink]
+    b       written
 8:
     mov     r0, 0
     j_s     [blink]
@@ -573,8 +582,7 @@ fk_wchk:
     brhs    r5, r10, 12f
     st      r10, [r4, 4]
 12:
-    mov     r0, 1
-    j_s     [blink]
+    b       written
 8:
     mov     r0, 0
     j_s     [blink]
@@ -584,7 +592,35 @@ fk_wchk:
     ld      r4, [r4, 0]
     j       [r4]
 
+; ---- end of a chip write (returns 1). While the flusher runs, it writes the save file later; when it
+; has not run for STALE ticks (the game's scripts stopped: Sonic X plays in its own native code after
+; its logo), the file is written now, from the game's own call (not the button task: no file access there)
+written:
+    mov     r4, ticks
+    ld      r5, [r4]
+    mov     r4, llee_tick
+    ld      r6, [r4]
+    sub     r5, r5, r6
+    brlo    r5, STALE, 1f
+    st.aw   blink, [sp, -4]
+    bl      persist
+    mov     r4, dirty_lo            ; nothing left for the flusher to write
+    mov     r5, 0xffff
+    st      r5, [r4]
+    mov     r5, 0
+    st      r5, [r4, 4]
+    mov     r4, pending
+    st      r5, [r4]
+    ld.ab   blink, [sp, 4]
+1:
+    mov     r0, 1
+    j_s     [blink]
+
     .align  4
+ticks:
+    .word   0                       ; button polls so far
+llee_tick:
+    .word   0                       ; ticks at the flusher's last call
 orig_table:
     .word   0
 dirty_lo:
@@ -628,7 +664,7 @@ def build(address, size=256, path="b:\\save.dat", fill=0xFF):
         raise ValueError("chip size must be a power of two")
     src = (SOURCE.replace("SYSTEM_DEVICE", str(SYSTEM_DEVICE)).replace("COMBO", str(COMBO))
            .replace("KEYS_FLAG", str(KEYS_FLAG)).replace("MASK", str(size - 1)).replace("SIZE", str(size))
-           .replace("QUIET", str(QUIET)).replace("FALLBACK_POLLS", str(FALLBACK_POLLS)).replace("CHIPFILL", str(fill)).replace("PATH", path.replace("\\", "\\\\")))
+           .replace("QUIET", str(QUIET)).replace("STALE", str(STALE)).replace("FALLBACK_POLLS", str(FALLBACK_POLLS)).replace("CHIPFILL", str(fill)).replace("PATH", path.replace("\\", "\\\\")))
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("stub.s", "stub.o", "stub.elf", "stub.bin"))

@@ -248,6 +248,13 @@ per frame), or at once on `__llEE(1)` (leaving with HINT + A + B). Until 2026-10
 writing were ActionScript (slow: Cars' 2 KB chip took ~10 s to write). A Flash-only game without a
 0x1009 list gets a copy of the resource directory with a 0x1009 entry (header 0x140 repointed).
 VERIFIED-EMU: load (marker bytes) and write-back in Cars and 1st Grade.
+**Games whose scripts stop** (2026-10-31, reported by a user: Sonic X made `save.dat` but never
+loaded it): after its logo Sonic X runs in its own native code, the main movie's frames stop, and
+`__llEE` was never called again, so the game's saves stayed in the RAM chip and `save.dat` kept the
+copy written at boot. Now the button poll (every 10 ms) counts ticks, `__llEE` notes the count, and
+a chip write that comes more than `STALE` ticks (1 s) after the last `__llEE` call writes the file at
+once, from the game's own call. VERIFIED-EMU on 0.6 and B5 (B5 from power-on): the save block (`99 'LEAP' ...` at 0x78) reaches the
+card, and booting with it skips the first-time intro straight to the zone map.
 
 ### 4b'. Full images: room made by moving the sound clips to the card (2026-10-26)
 Some 8 MiB images have no room at all for the main-movie copy: SpongeBob Saves the Day (USA) and

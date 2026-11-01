@@ -61,6 +61,45 @@ unsigned strlen(const char *s)
     return p - s;
 }
 
+/* 32-bit division (GCC calls these for / and %): libgcc's ARC version loops with LP, and on a
+   real Leapster 2 such loops broke native code that ran right in the emulator (LeapLoader-
+   Emulators, 2026-11-01). Build with -fno-branch-count-reg so GCC makes none either. */
+static unsigned udivmod(unsigned n, unsigned d, unsigned *rem)
+{
+    unsigned q = 0, bit = 1;
+    if (!d) {
+        *rem = n;
+        return ~0u;
+    }
+    while (d < n && !(d & 0x80000000u)) d <<= 1, bit <<= 1;
+    for (; bit; d >>= 1, bit >>= 1)
+        if (n >= d) n -= d, q |= bit;
+    *rem = n;
+    return q;
+}
+unsigned __udivsi3(unsigned n, unsigned d)
+{
+    unsigned r;
+    return udivmod(n, d, &r);
+}
+unsigned __umodsi3(unsigned n, unsigned d)
+{
+    unsigned r;
+    udivmod(n, d, &r);
+    return r;
+}
+int __divsi3(int a, int b)
+{
+    unsigned r, q = udivmod(a < 0 ? 0u - (unsigned)a : (unsigned)a, b < 0 ? 0u - (unsigned)b : (unsigned)b, &r);
+    return (a < 0) != (b < 0) ? (int)(0u - q) : (int)q;
+}
+int __modsi3(int a, int b)
+{
+    unsigned r;
+    udivmod(a < 0 ? 0u - (unsigned)a : (unsigned)a, b < 0 ? 0u - (unsigned)b : (unsigned)b, &r);
+    return a < 0 ? (int)(0u - r) : (int)r;
+}
+
 extern char __bss_end[], __heap_end[];
 static char *heap = __bss_end;
 void *ll_alloc(unsigned n)

@@ -430,15 +430,27 @@ impl App {
         }
     }
 
-    /// Looks for the Leapster 2 (reading only).
+    /// Looks for the Leapster 2 (reading only), then opens its SD card if it is closed.
     fn look_for_leapster(&mut self) {
         let scan = crate::usb::scan();
         self.ui.message = Some(match scan.found.len() {
             0 => format!("No Leapster 2 found ({} other disks left alone)", scan.others),
             n => format!("Leapster 2 found ({n} of its disks)"),
         });
+        // A closed SD card is opened at once (the button asked for that: the
+        // system's admin prompt is the only question left).
+        let closed_sd = scan
+            .found
+            .iter()
+            .find(|(kind, disk)| *kind == crate::usb::Kind::Sd && disk.mounted.is_none())
+            .map(|(_, disk)| disk.clone());
         self.usb = Some(scan);
         let _ = crate::usb::save_log(&self.data_dir);
+        if let Some(disk) = closed_sd {
+            if self.usb_job.is_none() {
+                self.usb_step(UsbStep::Open(disk));
+            }
+        }
     }
 
     /// Does a USB step the user said yes to: opening the SD card and ejecting

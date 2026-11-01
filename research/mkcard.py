@@ -203,6 +203,26 @@ def add_homebrew(out_dir, pkg, used):
     return m["name"], f"{m['id']}\\game.bin", code
 
 
+def approval_on_card(out_dir):
+    """The approval fields of a LeapFrog image already on the card, for homebrew built with no
+    cartridge game: LeapFrog's SD menu (read before this build writes the menu), else any game in
+    Leapster/Apps (one LeapFrog installed, or an app an earlier build made, which carries them too)."""
+    menu = os.path.join(out_dir, "Leapster", "System", "SDMenu", "SDMenu.bin")
+    apps = os.path.join(out_dir, "Leapster", "Apps")
+    found = [menu] + sorted(os.path.join(apps, d, f) for d in (os.listdir(apps) if os.path.isdir(apps) else [])
+                            if os.path.isdir(os.path.join(apps, d))
+                            for f in os.listdir(os.path.join(apps, d)) if f.lower().endswith(".bin"))
+    for path in found:
+        try:
+            fields = approval_fields(open(path, "rb").read())
+        except (OSError, ValueError, IndexError, struct.error):
+            continue
+        if all(k in fields for k in (0x04, 0x05, 0x06, 0x0D, 0x0E, 0x0F, 0x10)):
+            print(f"note  homebrew approval fields from {os.path.relpath(path, out_dir)}")
+            return fields
+    return None
+
+
 def finish_homebrew(out_dir, title, path, code, approval):
     """game.bin of an SDK build: its code.bin in an image with `approval` (swfgen.approval_fields)."""
     with open(os.path.join(out_dir, "Leapster", "Apps", *path.split("\\")), "wb") as f:
@@ -274,9 +294,12 @@ def build(out_dir, dumps, menu="leaploader", music=None, welcome=None, music_loo
         open(os.path.join(d, "icon.swf"), "wb").write(icongen.build_icon(title))
         games.append((title, f"{folder}\\game.bin"))
         print(f"ok    {label} -> Leapster/Apps/{folder} ({title}){note}")
+    if pending and approval is None:
+        approval = approval_on_card(out_dir)
     for title, path, code in pending:
         if approval is None:
-            raise SystemExit(f"{title}: a homebrew app built with the SDK needs a cartridge game on the same card")
+            raise SystemExit(f"{title}: a homebrew app built with the SDK needs a cartridge game, or LeapFrog's own "
+                             "SD menu or a game LeapFrog installed, on the same card")
         finish_homebrew(out_dir, title, path, code, approval)
     if not games:
         raise SystemExit("no supported games: nothing to put on the card")

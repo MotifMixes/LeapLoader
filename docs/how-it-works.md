@@ -30,7 +30,7 @@ game.bin    a ready Leapster 2 SD image (starts "LEAP", at most 8 MiB)
 files/      optional: copied into Leapster/Apps/<id>/
 card/       optional: copied to the card's top level (files already there are kept)
 ```
-The menu lists it with the games on a blue button (`HB_*` colours) with a white check at the right of its row
+The menu lists it with the games on a blue button (`HB_*` colours)
 (`menugen` `homebrew=`); games' buttons are green.
 The SDK and the API: [homebrew.md](homebrew.md).
 A homebrew goes back to the menu as the stubs do (section 3): PlayGame.lnk = the menu's path, then

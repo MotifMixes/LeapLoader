@@ -167,7 +167,17 @@
   Buttons from GPIO 0x0180_004C directly: A = SNES B, B = Y, HINT = A, PAUSE = Start; HOME + A = X, + B = Select,
   + Left/Right = L/R; HOME + PAUSE 2 s = back to the list. Picture drawn straight into VRAM 0x0300_0000 (LCD base set
   with LcdMPI +0x28 SetFrameBuffer), then its 2400 lines written back with `sr addr,[dc_fldl]` + poll DC_CTRL bit 8
-  (HYPOTHESIS for real hardware). Clock = RTOS ticks `[[0x3C7F_ACB0] + 0x34]` (0.6 and B5) x 0x2_7100 + timer 0
+  (**WRONG on real hardware**, 2026-11-01: the NES/GB ports did the same and the console showed black blocks,
+  leftover text and streaks; they now draw in RAM and copy to VRAM with `st.di`, as the SDK's ll_show. Fix
+  the SNES port the same way before it ships). **Also (2026-11-01, real hardware):** newlib's arc600 libc.a
+  string functions other than strcpy (`strncpy-bs`, `memcpy-bs`, `memset-bs`, `strchr-bs`) misbehave on the
+  console (LP_COUNT set right before the zero-overhead loop; fine in Ribbit): the ROM list's names came out
+  mixed. The NES/GB ports now use C versions (LeapLoader-Emulators `common/llstring.h`); the SNES port and
+  anything else built against newlib needs the same. libgcc's `__udivmodsi4` (behind `/` and `%`) has the
+  same LP_COUNT pattern: replaced too (`common/lldiv.h`). NES games stayed broken until GCC's own
+  zero-overhead loops went as well (`-fno-branch-count-reg` in build.sh, 88 `lp` in the NES build): then
+  **VERIFIED on hardware** (user, 2026-11-01). Rule: nothing that runs on the console may use `lp`
+  (check with objdump); Ribbit doesn't show the difference. The SNES port and the SDK need the flag too. Clock = RTOS ticks `[[0x3C7F_ACB0] + 0x34]` (0.6 and B5) x 0x2_7100 + timer 0
   (0x0180_D084) position; the tick ISR 0x4004_C928 keeps the timer continuous (a first timer-only clock lost ~36%).
   Own gp-free libc (`libc.c`: newlib's malloc/stdio/strcasecmp use gp); `build.sh` fails if anything uses gp. The
   native runs on the Flash player task's stack (a stack of our own stopped the task at the first task switch).

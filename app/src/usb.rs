@@ -712,13 +712,31 @@ mod platform {
     }
 
     /// Starts `exe args` with the admin prompt, waits; its exit code.
+    /// Quotes one argument the way Windows programs split their command line:
+    /// backslashes before a quote (or the closing quote) are doubled, so "J:\"
+    /// reaches the helper as J:\ and not as J:" (Windows error 2 at eject).
+    pub(super) fn quote_arg(a: &str) -> String {
+        let mut out = String::from("\"");
+        let mut slashes = 0;
+        for c in a.chars() {
+            if c == '"' {
+                // the backslashes already written, again, then one for the quote
+                out.push_str(&"\\".repeat(slashes + 1));
+            }
+            slashes = if c == '\\' { slashes + 1 } else { 0 };
+            out.push(c);
+        }
+        out.push_str(&"\\".repeat(slashes));
+        out.push('"');
+        out
+    }
+
     pub fn run_as_admin(exe: &Path, args: &[String]) -> Result<i32, UsbError> {
         use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
         use windows_sys::Win32::UI::Shell::{
             SEE_MASK_NO_CONSOLE, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW,
         };
-        let quote = |a: &str| format!("\"{}\"", a.replace('"', "\\\""));
-        let params = args.iter().map(|a| quote(a)).collect::<Vec<_>>().join(" ");
+        let params = args.iter().map(|a| quote_arg(a)).collect::<Vec<_>>().join(" ");
         let (verb, file, params) = (wide("runas"), wide(&exe.to_string_lossy()), wide(&params));
         // SAFETY: zero is a valid value for every field.
         let mut info: SHELLEXECUTEINFOW = unsafe { std::mem::zeroed() };
@@ -962,6 +980,16 @@ mod platform {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn admin_arguments_keep_trailing_backslashes() {
+        use platform::quote_arg;
+        assert_eq!(quote_arg(r"J:\"), r#""J:\\""#);
+        assert_eq!(quote_arg(r"\\.\PhysicalDrive6"), r#""\\.\PhysicalDrive6""#);
+        assert_eq!(quote_arg(r#"a\"b"#), r#""a\\\"b""#);
+        assert_eq!(quote_arg("C:\\Users\\Home\\AppData"), "\"C:\\Users\\Home\\AppData\"");
+    }
 
     #[test]
     fn only_the_leapster_2s_disks_are_ours() {

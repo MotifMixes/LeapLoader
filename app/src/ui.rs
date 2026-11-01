@@ -34,7 +34,7 @@ pub enum Action {
     Pick(Pick),
     /// Add every dump in the Ribbit emulator's games folders.
     AddRibbitGames,
-    /// Look for a Leapster 2 on USB (reading only).
+    /// Look for a Leapster 2 on USB, and open its SD card if it is closed.
     FindLeapster,
     /// Ask before a USB step (opening the SD card, building onto it, ejecting).
     AskUsb(UsbStep),
@@ -1186,7 +1186,7 @@ fn usb_section(ui: &mut egui::Ui, info: &Info, actions: &mut Vec<Action>) {
                 let look = egui::Button::new("Look for a Leapster 2").corner_radius(8);
                 if ui
                     .add_sized([ui.available_width(), 30.0], look)
-                    .on_hover_text("Reads the disks' names only")
+                    .on_hover_text("Finds the Leapster 2 by its disks' names, then opens its SD card (asks for admin rights)")
                     .clicked()
                 {
                     actions.push(Action::FindLeapster);
@@ -1240,6 +1240,15 @@ fn usb_section(ui: &mut egui::Ui, info: &Info, actions: &mut Vec<Action>) {
                                         actions.push(Action::AskUsb(UsbStep::BuildOnto(volume.clone())));
                                     }
                                 });
+                                ui.add_space(4.0);
+                                let files = egui::Button::new("Open the SD card's files").corner_radius(8);
+                                if ui
+                                    .add_sized([w, 28.0], files)
+                                    .on_hover_text("Shows the card in the file manager, to copy ROMs or anything else onto it")
+                                    .clicked()
+                                {
+                                    actions.push(Action::OpenFolder(volume.clone()));
+                                }
                                 ui.add_space(4.0);
                                 let text = if info.usb_built == Some(volume.as_path()) {
                                     "Eject the Leapster 2 (done)…"

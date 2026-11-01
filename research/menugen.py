@@ -29,7 +29,7 @@ from swfgen import (RAW_FIRST_HANDLE, SEQ_FIRST_HANDLE, AS, approval_fields, bit
                     define_sprite, define_text, do_action, method, pack_rib, place, place_enterframe, rounded_rects,
                     set_property, show_frame, swf, tag)
 
-VERSION = "0.2.5"  # matches the desktop app (app/Cargo.toml; user, 2026-10-25); the menu was called v0.3.0 in earlier notes
+VERSION = "0.2.6"  # matches the desktop app (app/Cargo.toml; user, 2026-10-25); the menu was called v0.3.0 in earlier notes
 
 TOP = 44            # list area top
 PITCH = 24          # row pitch
@@ -77,6 +77,24 @@ BTN_UP, BTN_DOWN, BTN_LEFT, BTN_RIGHT, BTN_A, BTN_B, BTN_HOME = 256, 512, 1024, 
 # Pause is a system button (events of type 5: sysButton, bIsPressed, newSysValue), LF_PAUSE_BUTTON = 8,
 # as the BIOS's UI_HandleSystemButtons reads it (VERIFIED-FW). onSys passes it to onBtn as this bit.
 SYS_PAUSE, BTN_PAUSE = 8, 1 << 20
+# Volume (user, 2026-11-01: "a visualizer for the volume just like the one in the bios", with its sound):
+# as LeapFrog's SD menu does it (its UI_DisplayVolume / adjustVolume, LSTR-0x00130001 .lfp): system
+# buttons (UI_HandleSystemButtons, on bIsPressed); the master volume steps through these 13 levels
+# (LF_GetMasterVolume, then the index of the first level >= it, +-1, LF_SetMasterVolume); lfh(39) on a
+# step (and at the bottom), lfh(25) when already at the top; a panel slides up from the bottom showing
+# the index as lit bars out of 12. Panel and bars measured from that menu's (Ribbit screenshot).
+SYS_VOL_UP, SYS_VOL_DOWN = 4, 5  # LF_VOLUME_BUTTON_UP/DOWN (system events, type 5)
+VOLUMES = [0, 16, 32, 48, 64, 72, 80, 88, 96, 104, 112, 120, 127]
+VOL_SOUND, VOL_TOP_SOUND = 39, 25
+VOL_Y, VOL_HIDE = 102, 60       # the panel's top edge when shown; how far down it slides to hide
+VOL_STEP = 20                   # pixels per frame (20 fps) sliding in and out
+VOL_HOLD = 20                   # frames it stays up after the last press (1 s)
+VOL_REPEAT = 4                  # frames in which a second volume event counts as the same press (200 ms)
+# The user's volume (mv0): read when the menu starts, put back after every LF_SetRawVolume(100) that
+# ends a louder sound (welcome, music parts): that 100 alone left the console louder than the user had
+# it (user, 2026-11-01), and kept up to date by volStep.
+VOL_BAR_X, VOL_BAR_Y, VOL_BAR_PITCH, VOL_BAR_W, VOL_BAR_H = 15, 125, 11, 8, 25
+VOL_EDGE, VOL_GREY, VOL_FILL, VOL_RIM, VOL_OFF, VOL_ON = 0xFFFFFF, 0xCCCCCC, 0xFF77FF, 0x443366, 0x000000, 0x00CC55
 # Home: BT_StartSDGame with a file that does not exist. The console restarts, the SD copy fails
 # ("CopyGameFromSdFatToRam failed") and the BIOS boots normally: logo, then Sign In (VERIFIED-EMU).
 # BT_Execute("System"/"Application") and BT_SetNextBoot(0/1) do nothing from the SD menu.
@@ -86,6 +104,21 @@ SYS_PAUSE, BTN_PAUSE = 8, 1 << 20
 HOME_PATH = "LeapLoader\\home.txt"
 HOME_TEXT = b"LeapLoader: the menu's Home button points the console here to go back to the Leapster menu.\r\n"
 SETTINGS = "b:\\Leapster\\System\\SDMenu\\LeapLoader.txt"  # "LL1|music|sort|recent path|...|"
+VOLUME_FILE = "b:\\Leapster\\System\\SDMenu\\LeapLoaderVolume.txt"  # the volume level 0-12 as text, shared with
+# the emulator apps (LeapLoader-Emulators common/llvol.h): the console restarts between them, and the BIOS
+# comes back at its own level (user, 2026-11-01: home menu on 4 bars, LeapLoader then on 6). Only a hand-over:
+# written when the menu starts a game (an emulator app rewrites it when its level changes), and spoilt with
+# VOLUME_SPENT once the menu has read it. Kept for good, it won over the BIOS's level: console turned up from mute,
+# LeapLoader still muted (user, 2026-11-01). Without it, the BIOS's level. A game left by powering off leaves it. Level 0 is not applied.
+VOLUME_SPENT = "-"
+
+
+def vol_index(b):
+    """vix, if not known yet (< 0): the index of the first level >= mv0, the volume at start."""
+    if_(b, binop(V("vix"), N(0), "lt"), lambda c: (
+        setv(c, "vix", N(0)),
+        [if_(c, binop(V("mv0"), N(v), "gt"), lambda e: setv(e, "vix", binop(V("vix"), N(1), "add")))
+         for v in VOLUMES[:-1]]))
 RECENT_MAX = 10      # (the settings file is parsed one character at a time)
 
 # Options (Pause): row 0 is the search box.
@@ -418,6 +451,23 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
         tags.append(define_sprite(sprite_id, [place(1, ID_TOOL_BOX, 0, 0), place(2, icon_id, 0, 0),
                                               place(3, button_id, 0, 0), show_frame()]))
     tags.append(define_shape_layers(ID_TEXT_MASK, [(0x000000, [(PILL_X + TEXT_X, 0, AVAIL, PILL_H)])]))
+    # The volume panel (sprite "vol", shown by volStep, slid by tick): a white-rimmed pink panel
+    # running off the bottom, 12 dark bars, and over each a green one (g0..g11) shown up to the level.
+    vol_panel = ids.take(4)
+    vol_on, id_vol, vol_on_clip = vol_panel + 1, vol_panel + 2, vol_panel + 3
+    bars = [(VOL_BAR_X + i * VOL_BAR_PITCH, VOL_BAR_Y) for i in range(12)]
+    tags.append(define_shape_layers(vol_panel, [
+        (VOL_EDGE, rounded_rects(6, VOL_Y, 148, 80, 6)),
+        (VOL_GREY, rounded_rects(7, VOL_Y + 1, 146, 79, 5)),
+        (VOL_EDGE, rounded_rects(8, VOL_Y + 2, 144, 78, 4)),
+        (VOL_FILL, rounded_rects(10, VOL_Y + 4, 140, 76, 3)),
+        (VOL_RIM, [r for x, y in bars for r in rounded_rects(x, y, VOL_BAR_W, VOL_BAR_H, 1)]),
+        (VOL_OFF, [(x + 1, y + 1, VOL_BAR_W - 2, VOL_BAR_H - 2) for x, y in bars])]))
+    tags.append(define_shape_layers(vol_on, [(VOL_ON, [(1, 1, VOL_BAR_W - 2, VOL_BAR_H - 2)])]))
+    tags.append(define_sprite(vol_on_clip, [place(1, vol_on, 0, 0), show_frame()]))  # (a clip: _visible works)
+    tags.append(define_sprite(id_vol, [place(1, vol_panel, 0, 0)]
+                              + [place(2 + i, vol_on_clip, x, y, name=f"g{i}") for i, (x, y) in enumerate(bars)]
+                              + [show_frame()]))
     # Header: title, then "My Games: <count>" or "Search:" + the search text.
     title_text = ids.take(2)
     tags += shadowed_text(title_text, [(4, 22, "LeapLoader")], TITLE, TITLE_SHADOW, scale=2, offset=2)
@@ -784,6 +834,7 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
     f.callv("LF_SetRawVolume", MUSIC_VOLUME)
     setv(f, "mp", AS().call("LF_PlayAudioRaw", AS().call("lfh", intro_handle)))  # its audio player
     f.callv("LF_SetRawVolume", 100)
+    f.callv("LF_SetMasterVolume", V("mv0"))  # (the user's volume back: see mv0)
     if music_seq:
         f.callv("LF_SetBgMIDIVolume", seq_volume)
         f.callv("LF_PlayBgMIDI", AS().call("lfh", SEQ_FIRST_HANDLE))
@@ -807,14 +858,26 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
         b.callv("LF_SetRawVolume", MUSIC_VOLUME),
         setv(b, "mp", AS().call("LF_PlayAudioRaw", AS().call("lfh", binop(N(intro_handle + 1), V("k"), "add")))),
         b.callv("LF_SetRawVolume", 100),
+        b.callv("LF_SetMasterVolume", V("mv0")),
         # mt: when the loop point would have played (entry k starts (k - MUSIC_JOIN_BACK) steps after it)
         setv(b, "mt", binop(AS().raw(0x34), binop(binop(V("k"), N(MUSIC_JOIN_BACK), "sub"), N(MUSIC_JOIN_MS), "mul"), "sub")),
         setv(b, "mseg", N(1))))
     a.define_function("musNext", [], f)
 
-    # function tick(): every frame. While a game is starting (go >= 0): blink the glow, then
-    # start it once the select sound has played. Then one marquee step for the selected title.
+    # function tick(): every frame. The volume panel slides (up while vt counts down, then down
+    # and out of sight). While a game is starting (go >= 0): blink the glow, then start it once
+    # the select sound has played. Then one marquee step for the selected title.
     tick = AS()
+    if_(tick, binop(V("vlk"), N(0), "gt"), lambda b: setv(b, "vlk", binop(V("vlk"), N(1), "sub")))
+    if_(tick, binop(V("vy"), N(VOL_HIDE), "lt"), lambda b: (
+        if_(b, binop(V("vt"), N(0), "gt"),
+            lambda c: (setv(c, "vt", binop(V("vt"), N(1), "sub")),
+                       if_(c, binop(V("vy"), N(0), "gt"), lambda e: setv(e, "vy", binop(V("vy"), N(VOL_STEP), "sub")))),
+            lambda c: setv(c, "vy", binop(V("vy"), N(VOL_STEP), "add"))),
+        if_(b, binop(V("vy"), N(0), "lt"), lambda c: setv(c, "vy", N(0))),
+        set_property(b, "/vol", 1, V("vy")),
+        if_(b, binop(V("vy"), N(VOL_HIDE), "lt").op("not"), lambda c: (
+            visible(c, "/vol", N(0))))))
     if_(tick, binop(V("tft"), N(0), "gt"), lambda b: (
         setv(b, "tft", binop(V("tft"), N(1), "sub")),
         if_(b, binop(V("tft"), N(0), "eq"), lambda c: visible(c, "/tg", N(0)))))
@@ -829,6 +892,8 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
     set_property(tick, "/list/hi", 7, AS().getvar("gt").push(BLINK).op("div").op("int").push(2).op("mod").push(0).op("eq"))
     tick.getvar("gt").push(LAUNCH_DELAY).op("lt").if_true("k_end")
     set_property(tick, "/list/hi", 7, AS().push(1))
+    vol_index(tick)  # the level for the game's emulator app, and for the menu after the restart
+    tick.call("SD_WriteText", VOLUME_FILE, cat(V("vix")).op("tostring")).op("pop")
     tick.callv("BT_StartSDGame", AS().getvar("paths").getvar("go").op("getmember"))
     tick.push("go", -1).raw(0x1D)  # only reached if the BIOS did not reboot into the game
     tick.label("k_end")
@@ -1175,15 +1240,60 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
     a.getvar("SystemEvents").push("prototype").op("getmember").push("doRegister").getvar("LF_RegisterCallback").op("setmember")
     call = AS().getvar("this").push("ret3").op("getmember").getvar("this").push("ret2").op("getmember")         .getvar("this").push("ret1").op("getmember")         .push(3).getvar("this").push("callbackFunction").op("callmethod").op("pop")
     a.getvar("SystemEvents").push("prototype").op("getmember").push("doCall").define_function("", [], call).op("setmember")
-    f = AS()  # function onSys(b, down, v): Pause pressed -> onBtn
+    f = AS()  # function volStep(inc): LeapFrog's adjustVolume, then the panel up for VOL_HOLD frames
+    # On the console one press moved two levels (user, 2026-11-01; one in Ribbit), so: the level's
+    # index is kept (vix; read from LF_GetMasterVolume only the first time, as LeapFrog's
+    # getVolumeIndex), not worked out again from a volume the BIOS may have changed; and a second
+    # event within VOL_REPEAT frames (vlk, counted down by tick) is taken as the same press.
+    def step(b):
+        setv(b, "vlk", N(VOL_REPEAT))
+        vol_index(b)
+        setv(b, "vix", binop(V("vix"), V("inc"), "add"))
+        if_(b, binop(V("vix"), N(0), "lt"),
+            lambda c: (setv(c, "vix", N(0)), play_sound(c, VOL_SOUND)),
+            lambda c: if_(c, binop(V("vix"), N(len(VOLUMES) - 1), "gt"),
+                          lambda e: (setv(e, "vix", N(len(VOLUMES) - 1)), play_sound(e, VOL_TOP_SOUND)),
+                          lambda e: play_sound(e, VOL_SOUND)))
+        for i, v in enumerate(VOLUMES):
+            if_(b, binop(V("vix"), N(i), "eq"), lambda c, v=v: setv(c, "mv0", N(v)))
+        b.callv("LF_SetMasterVolume", V("mv0"))
+        for i in range(len(VOLUMES) - 1):
+            visible(b, f"/vol/g{i}", binop(N(i), V("vix"), "lt"))
+        visible(b, "/vol", N(1))
+        setv(b, "vt", N(VOL_HOLD))
+        # (tick slides it only while vy < VOL_HIDE: from hidden, start it there)
+        if_(b, binop(V("vy"), N(VOL_HIDE), "lt").op("not"), lambda c: setv(c, "vy", N(VOL_HIDE - 1)))
+    if_(f, binop(V("vlk"), N(0), "gt").op("not"), step)
+    a.define_function("volStep", ["inc"], f)
+
+    f = AS()  # function onSys(b, down, v): Pause pressed -> onBtn; volume up/down -> volStep
     if_(f, binop(binop(V("b"), N(SYS_PAUSE), "eq"), V("down"), "and"),
         lambda c: c.call("onBtn", N(BTN_PAUSE), N(BTN_PAUSE)).op("pop"))
+    if_(f, binop(binop(V("b"), N(SYS_VOL_UP), "eq"), V("down"), "and"), lambda c: c.call("volStep", N(1)).op("pop"))
+    if_(f, binop(binop(V("b"), N(SYS_VOL_DOWN), "eq"), V("down"), "and"), lambda c: c.call("volStep", N(-1)).op("pop"))
     a.define_function("onSys", ["b", "down", "v"], f)
     a.push("systemEvents").getvar("onSys").push(1, "SystemEvents").op("newobject").raw(0x1D)
 
     visible(a, "/pm", N(0))
     visible(a, "/tg", N(0))
     visible(a, "/kb", N(0))
+    setv(a, "vy", N(VOL_HIDE))
+    setv(a, "vt", N(0))
+    setv(a, "vlk", N(0))
+    setv(a, "vix", N(-1))
+    setv(a, "mv0", AS().call("LF_GetMasterVolume"))
+    # the level the menu (or an emulator app) handed over before the restart: applied at once, then spoilt
+    local(a, "vs", AS().call("SD_ReadText", VOLUME_FILE))
+    if_(a, binop(cat(V("vs")).op("typeof"), N("string"), "eq"), lambda b: (
+        local(b, "vn", cat(V("vs")).op("tonumber")),
+        # (not 0: the menu never opens silent; user, 2026-11-01)
+        if_(b, binop(binop(V("vn"), N(0), "gt"), binop(V("vn"), N(len(VOLUMES)), "lt"), "and"), lambda c: (
+            setv(c, "vix", V("vn")),
+            [if_(c, binop(V("vix"), N(i), "eq"), lambda e, v=v: setv(e, "mv0", N(v))) for i, v in enumerate(VOLUMES)],
+            c.callv("LF_SetMasterVolume", V("mv0")))),
+        b.call("SD_WriteText", VOLUME_FILE, VOLUME_SPENT).op("pop")))
+    set_property(a, "/vol", 1, N(VOL_HIDE))
+    visible(a, "/vol", N(0))
     a.call("load").op("pop")
     a.call("rebuild").op("pop")
     if music:
@@ -1195,6 +1305,7 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
         a.callv("LF_SetRawVolume", RAW_VOLUME)
         play_sound(a, welcome_handle)
         a.callv("LF_SetRawVolume", 100)
+        a.callv("LF_SetMasterVolume", V("mv0"))
     a.op("stop")
 
     ticker = AS().call("_level0:tick").op("pop")
@@ -1208,9 +1319,9 @@ def build_menu(games, approval, version=VERSION, music=None, welcome=None, music
              place(9, ID_NONE, 0, 0, name="none"), place(10, ID_FOOTER_BAR, 0, 0), place(11, ID_FOOTER_TEXT, 0, 0)]
     if total:
         tags.append(place(18, ID_PAGE, 0, 0, name="pg"))
-    if total:
-        tags.append(place_enterframe(16, ID_TICKER, ticker))
-    tags += [place(20, ID_OPTIONS, 0, 0, name="pm"), place(21, ID_KEYBOARD, 0, 0, name="kb")]
+    tags.append(place_enterframe(16, ID_TICKER, ticker))  # (always: the volume panel slides in tick too)
+    tags += [place(20, ID_OPTIONS, 0, 0, name="pm"), place(21, ID_KEYBOARD, 0, 0, name="kb"),
+             place(22, id_vol, 0, 0, name="vol")]
     tags += [do_action(a), show_frame()]
     movie = swf(tags, bg=SKY[0], frame_rate=20)
     return pack_rib([movie], title="LeapLoader " + version, part="LL-MENU", approval=approval,

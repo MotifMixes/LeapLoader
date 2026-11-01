@@ -46,6 +46,19 @@ image may be at most **8 MiB** (VERIFIED-FW/EMU).
 | LeapLoader menu (default) | `mkcard.py OUT DUMPS` | Our own list menu, optional background music (`--music SONG.mid --music-loop SECONDS`). VERIFIED-EMU |
 | LeapFrog's own SD menu ("vanilla") | `mkcard.py --menu LSTR-0x00130001-000000.lfp OUT DUMPS` | VERIFIED-EMU with 72 games |
 
+**Volume in LeapLoader's menu** (2026-11-01, VERIFIED-EMU): the BIOS doesn't draw a volume display;
+each movie does its own (LeapFrog's SD menu: pink panel; games: their own). The menu now does what
+LeapFrog's menu does (its `UI_HandleSystemButtons` / `adjustVolume`): system button events 4/5 while
+pressed (a release sends one more, unpressed), 13 master-volume levels (`menugen.VOLUMES`, set with
+`LF_SetMasterVolume`), BIOS sound lfh(39) per step and lfh(25) at the top, and a panel with 12 bars
+sliding up from the bottom for 1 s. A short tap in the emulator harness (`btn`) sends no event: hold it.
+The level reaches the next start only through `LeapLoaderVolume.txt` (SDMenu folder, index 0-12 as text with
+a 0 byte): the menu writes it as it starts a game, an emulator app rewrites it when its level changes, and the
+menu applies it at start and then spoils it (`-`). Without it the menu keeps the BIOS's level (a file kept for
+good had made LeapLoader come up muted, user 2026-11-01). VERIFIED-EMU: hand-over only. UNVERIFIED: whether the
+BIOS's level follows the home menu; a game left by powering off leaves the file, so that level still applies,
+except 0: the menu ignores a saved mute and opens at the BIOS's level.
+
 LeapLoader menu v0.3.0 (`research/menugen.py`; all VERIFIED-EMU with 77 titles, 2026-10-25):
 * **Game names** from `research/gamenames.py`: the box name of every known dump, by the CRC-32 of the
   dump file (file names are often codes like `letrfactry.bin`, and the cartridge's own title field is an
@@ -312,6 +325,20 @@ Only fields whose meaning is known are rewritten; unknown resource types make th
 * Save descriptor 0x1005/3 (long form: three functions and a data address at +0x1C..+0x28).
 * **Native ARC code** (resources 0x1000/0x1001/0x1009/0x100D/0x3001): `research/nativescan` finds
   every absolute address in code and data (long immediates, data words, switch tables, INI blocks).
+  **Pixel data is left alone** (fixed 2026-11-01, VERIFIED-EMU against the cartridge in Ribbit): the
+  native data after the code can run into packed graphics, where a word now and then falls in
+  0x8000_0000-0x807F_FFFF; relocating those scrambled sprites (Counting on Zero's bathtub and alarm
+  clock: black, shifted, stray lines; Sonic X's sprites). A 4 KiB block after the code where at least
+  a quarter of the candidate words point at misaligned non-code addresses (real pointers point at an
+  instruction or a 4-byte-aligned address; handles below 0x8000_2000 not counted) has none of its
+  words relocated: 1169 words in Counting on Zero, 191 Go Diego Go, 106 Sonic X, 42 Cars. Dropping
+  lone misaligned words too broke Counting on Zero at start (some are real), and so did looking at
+  the native tables in front of the code (their handles are odd numbers).
+  **Runs of sparse blocks** (same date): blocks with under 24 candidates are also judged in runs (ended by a
+  dense block; at least 4 blocks; a quarter of the words misaligned or into the header, below 0x8000_2000): whole
+  run left alone. Counting on Zero 1169 -> 1538 words (0xC3000-0x3A4000 now identical to the cartridge), Sonic X
+  134 -> 635, Go Diego Go 191 -> 783; 13 released titles change. VERIFIED-EMU: six of them start, Counting on Zero
+  and Sonic X reach play. UNVERIFIED on hardware: the black Zero did not reproduce in Ribbit, even on the old rule.
   **Data words from 0x8000_0000 up to 0x8000_0000 + (the largest table's entry count, at least
   0x100) are left alone**: they are resource handles (0x8000_0000 + index), not pointers. Go Diego
   Go's 0x100D lists hold 571 of them, Rock the World's go up to 0x8000_1A1F (its table 9 has 6687

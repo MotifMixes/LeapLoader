@@ -347,6 +347,77 @@ persist:
     j       [blink]
 
     .align  4
+; ---- the stub's prompt (prompt_rle's runs) into VRAM with uncached stores, then the bar for r9
+; polls held (BAR_W * r9 / PROMPT_POLLS ~ r9 * 7 / 16 pixels, in pairs)
+draw_prompt:
+    mov     r0, prompt_data
+    mov     r1, VRAM + PANEL_Y * VRAM_PITCH + PANEL_X / 2 * 3
+    mov     r5, PANEL_H
+dp_row:
+    mov     r7, r1
+    mov     r6, PANEL_W / 2
+dp_run:
+    ldb.ab  r2, [r0, 1]
+    bbit0   r2, 7, dp_fill
+    bclr    r2, r2, 7               ; see-through pairs
+    sub     r6, r6, r2
+    add     r3, r2, r2
+    add     r3, r3, r2
+    add     r7, r7, r3
+    b       dp_next
+dp_fill:
+    ldb.ab  r3, [r0, 1]
+    ldb.ab  r4, [r0, 1]
+    ldb.ab  r8, [r0, 1]
+    sub     r6, r6, r2
+dp_put:
+    stb.di  r3, [r7]
+    stb.di  r4, [r7, 1]
+    stb.di  r8, [r7, 2]
+    add     r7, r7, 3
+    sub     r2, r2, 1
+    brne    r2, 0, dp_put
+dp_next:
+    brne    r6, 0, dp_run
+    add     r1, r1, VRAM_PITCH
+    sub     r5, r5, 1
+    brne    r5, 0, dp_row
+    ; the bar: r10 = min(r9 * 7 / 16, BAR_W) / 2 pairs
+    add     r10, r9, r9
+    add     r10, r10, r10
+    add     r10, r10, r10
+    sub     r10, r10, r9
+    lsr     r10, r10
+    lsr     r10, r10
+    lsr     r10, r10
+    lsr     r10, r10
+    brlo    r10, BAR_W, 1f
+    mov     r10, BAR_W
+1:
+    lsr     r10, r10
+    breq    r10, 0, dp_done
+    mov     r3, BAR_B0
+    mov     r4, BAR_B1
+    mov     r8, BAR_B2
+    mov     r1, VRAM + BAR_Y * VRAM_PITCH + BAR_X / 2 * 3
+    mov     r5, BAR_H
+dp_brow:
+    mov     r7, r1
+    mov     r2, r10
+dp_bput:
+    stb.di  r3, [r7]
+    stb.di  r4, [r7, 1]
+    stb.di  r8, [r7, 2]
+    add     r7, r7, 3
+    sub     r2, r2, 1
+    brne    r2, 0, dp_bput
+    add     r1, r1, VRAM_PITCH
+    sub     r5, r5, 1
+    brne    r5, 0, dp_brow
+dp_done:
+    j_s     [blink]
+
+    .align  4
 ; ---- ButtonMPI ([[gp+4]+0x7C]) copied with its poll (+8) wrapped, unless it is ours already
 btn_install:
     ld      r1, [gp, 4]
@@ -398,8 +469,30 @@ btn_poll:
     mov     r4, 0
 2:
     st      r4, [r3]
-    cmp     r4, FALLBACK_POLLS
-    bne     3f
+    ; polls until going back: FALLBACK_POLLS, or PROMPT_POLLS with our own prompt drawn when no
+    ; script is running (no flusher call for STALE polls: ingame.py's prompt can't show)
+    ; The panel is drawn whenever HINT + A + B are held: on a real console ingame.py's prompt did
+    ; not show in Cars with its script running (user, 2026-11-01; it does in Ribbit). With a script
+    ; running, that prompt still does the going back (saves written) and the bar stays full until it
+    ; or the fallback does.
+    mov     r5, FALLBACK_POLLS
+    breq    r4, 0, bp_check
+    mov     r6, PROMPT_ON
+    breq    r6, 0, bp_check
+    mov     r9, r4
+    bl      draw_prompt
+    mov     r3, btn_hold
+    ld      r4, [r3]
+    mov     r5, PROMPT_LATE             ; (Cars' name entry: the script runs, its prompt doesn't go back)
+    mov     r6, ticks
+    ld      r6, [r6]
+    mov     r7, llee_tick
+    ld      r7, [r7]
+    sub     r6, r6, r7
+    brlo    r6, STALE, bp_check
+    mov     r5, PROMPT_POLLS
+bp_check:
+    brlo    r4, r5, 3f
     mov     r0, 0x400f78fc          ; "ExtStorage": restart into the PlayGame.lnk written at install
     mov     r1, 0x400f0674
     jl      [r1]
@@ -649,22 +742,97 @@ mode_r:
     .asciz  "rb"
 mode_w:
     .asciz  "w"
+prompt_data:                        ; the stub's prompt panel as runs (prompt_rle)
+PROMPT_DATA
     .align  4
 mem:
     .fill   SIZE, 1, CHIPFILL
 """
 
 
-def build(address, size=256, path="b:\\save.dat", fill=0xFF):
+# The stub's own prompt (user, 2026-11-01: "i rly want it to show the same bar as the other games"):
+# where no script runs (name entry, videos, Counting on Zero's native screens) ingame.py's prompt never
+# shows, so with HINT + A + B held and no flusher call for STALE polls, the button poll draws the same
+# panel straight into the LCD's VRAM (0x0300_0000, uncached stores; the game's next frame covers it, so
+# every poll draws it again) with the bar filling over PROMPT_POLLS, then goes back as the fallback does.
+# Panel, texts and colours as LeapLoader-Emulators' llm_back_prompt (ingame.py's layout, 12-bit colours).
+PROMPT_POLLS = 250                         # 2.5 s, as the prompt's bar
+PROMPT_LATE = 300                          # 3 s: with the panel drawn and a script running, back if its prompt hasn't gone
+PANEL_X, PANEL_Y, PANEL_W, PANEL_H = 12, 34, 136, 88
+BAR_X, BAR_Y, BAR_W, BAR_H, BAR_RGB = 26, 104, 108, 8, 0x3B4
+VRAM, VRAM_PITCH = 0x0300_0000, 240        # 160 x 160, two 12-bit pixels in three bytes
+
+
+def pack(a, b):
+    """Two 12-bit pixels as the LCD stores them: g0b0, r0r1, g1b1."""
+    return bytes([a & 0xFF, (a >> 4 & 0xF0) | (b >> 8), b & 0xFF])
+
+
+def prompt_rle(menu_name):
+    """The panel as runs, row by row (PANEL_W / 2 pairs a row, no run across rows): a byte 0x80 + n
+    skips n pairs (see-through: the rounded corners), a byte n < 0x80 then 3 bytes repeats that pair n times."""
+    from pixelfont import GLYPHS, ADVANCE
+    from swfgen import rounded_rects
+    img = [[None] * PANEL_W for _ in range(PANEL_H)]
+
+    def rect(x, y, w, h, c):
+        for yy in range(y, y + h):
+            for xx in range(x, x + w):
+                if 0 <= yy - PANEL_Y < PANEL_H and 0 <= xx - PANEL_X < PANEL_W:
+                    img[yy - PANEL_Y][xx - PANEL_X] = c
+
+    def text(x, y, s, c, sc=1):  # from the glyph's top row, as llm_text
+        for ch in s:
+            for r, row in enumerate(GLYPHS.get(ch, GLYPHS["?"])):
+                for i, px in enumerate(row):
+                    if px == "#":
+                        rect(x + i * sc, y + r * sc, sc, sc, c)
+            x += ADVANCE * sc
+    for r in rounded_rects(12, 34, 136, 88, 4):
+        rect(*r, 0xFD1)
+    for r in rounded_rects(15, 37, 130, 82, 3):
+        rect(*r, 0x316)
+    text(22, 43, "Back to the", 0xFFF)
+    text(20, 56, menu_name, 0xFD1, 2)
+    text(22, 78, "Keep holding", 0xFFF)
+    text(22, 89, "HINT + A + B", 0xFD1)
+    for r in rounded_rects(24, 102, 112, 12, 2):
+        rect(*r, 0x103)
+    out = bytearray()
+    for row in img:
+        pairs = []
+        for p in range(PANEL_W // 2):
+            a, b = row[2 * p], row[2 * p + 1]
+            pairs.append(None if a is None and b is None else pack(a if a is not None else b, b if b is not None else a))
+        i = 0
+        while i < len(pairs):
+            j = i
+            while j < len(pairs) and pairs[j] == pairs[i] and j - i < 0x7F:
+                j += 1
+            out += bytes([0x80 + j - i]) if pairs[i] is None else bytes([j - i]) + pairs[i]
+            i = j
+    return bytes(out)
+
+
+def build(address, size=256, path="b:\\save.dat", fill=0xFF, menu_name=None):
     """The stub assembled for `address` (a word-aligned RAM address in the SD image) with a
     `size`-byte chip kept in the file `path` (a BIOS path: b:\\Leapster\\Apps\\<game>\\save.dat),
     starting as `fill` before a save is read (0xFF: an erased chip; 0 for the games that came from
     the native chip, which starts zeroed: Pet Pals shows junk names from an erased one)."""
     if size & (size - 1) or not 32 <= size <= 0x10000:
         raise ValueError("chip size must be a power of two")
+    data = prompt_rle(menu_name) if menu_name else b""
+    prompt = "\n".join("    .byte   " + ", ".join(str(x) for x in data[i:i + 16]) for i in range(0, len(data), 16))
     src = (SOURCE.replace("SYSTEM_DEVICE", str(SYSTEM_DEVICE)).replace("COMBO", str(COMBO))
            .replace("KEYS_FLAG", str(KEYS_FLAG)).replace("MASK", str(size - 1)).replace("SIZE", str(size))
-           .replace("QUIET", str(QUIET)).replace("STALE", str(STALE)).replace("FALLBACK_POLLS", str(FALLBACK_POLLS)).replace("CHIPFILL", str(fill)).replace("PATH", path.replace("\\", "\\\\")))
+           .replace("QUIET", str(QUIET)).replace("STALE", str(STALE)).replace("FALLBACK_POLLS", str(FALLBACK_POLLS))
+           .replace("PROMPT_ON", "1" if data else "0").replace("PROMPT_POLLS", str(PROMPT_POLLS)).replace("PROMPT_LATE", str(PROMPT_LATE))
+           .replace("PROMPT_DATA", prompt)
+           .replace("VRAM_PITCH", str(VRAM_PITCH)).replace("VRAM", str(VRAM)).replace("PANEL_X", str(PANEL_X))
+           .replace("PANEL_Y", str(PANEL_Y)).replace("PANEL_W", str(PANEL_W)).replace("PANEL_H", str(PANEL_H))
+           .replace("BAR_B0", str(pack(BAR_RGB, BAR_RGB)[0])).replace("BAR_B1", str(pack(BAR_RGB, BAR_RGB)[1]))
+           .replace("BAR_B2", str(pack(BAR_RGB, BAR_RGB)[2])).replace("BAR_X", str(BAR_X)).replace("BAR_Y", str(BAR_Y))
+           .replace("BAR_W", str(BAR_W)).replace("BAR_H", str(BAR_H)).replace("CHIPFILL", str(fill)).replace("PATH", path.replace("\\", "\\\\")))
     exe = lambda n: os.path.join(TOOLS, f"arc-elf32-{n}{EXE}")
     with tempfile.TemporaryDirectory() as t:
         s, o, e, b = (os.path.join(t, n) for n in ("stub.s", "stub.o", "stub.elf", "stub.bin"))

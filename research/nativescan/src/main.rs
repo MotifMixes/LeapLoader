@@ -217,11 +217,13 @@ fn main() {
     let d = ribbit_core::read_image(&args[0]).expect("image");
     let mut relocs_out = None;
     let mut verbose = false;
+    let mut loops = false;
     let mut it = args[1..].iter();
     while let Some(a) = it.next() {
         match a.as_str() {
             "--relocs" => relocs_out = it.next().cloned(),
             "--verbose" => verbose = true,
+            "--loops" => loops = true,
             other => panic!("unknown argument {other}"),
         }
     }
@@ -613,6 +615,60 @@ fn main() {
     }
     relocs.sort();
     relocs.dedup();
+    // Pixel data is not pointers. Native data can run into packed graphics (low entropy, so not
+    // "opaque"), where a word now and then falls in the image's range: relocating it broke pixels
+    // (Counting on Zero's bathtub and alarm clock: black, shifted, lines; clean from the cartridge in
+    // Ribbit, 2026-11-01). A real pointer's target is an instruction start or 4-byte aligned: no word
+    // in a 4 KiB block after the code where at least a quarter of the candidates are misaligned like
+    // that is relocated. (Dropping lone misaligned words too broke the game at start: some are real.)
+    // (values below base + 0x2000 may be resource handles, 0x8000_0000 + index: not counted; only
+    // data after the code is looked at, not the native tables in front of it)
+    let misaligned = |v: u32| v >= base + 0x2000 && !code.ins.contains_key(&v) && v % 4 != 0;
+    // (also counted for runs, below: words into the header and resource directory, which data has
+    // no reason to point at; Sonic X's graphics hold 0x8000_0000, 0x8000_0C07, 0x8000_CC0C ...)
+    let odd = |v: u32| misaligned(v) || v < base + 0x2000;
+    let mut blocks: BTreeMap<u32, (u32, u32, u32)> = BTreeMap::new();
+    for r in relocs.iter().filter(|r| r.1 == "word" && r.0 >= span_hi) {
+        let e = blocks.entry(r.0 >> 12).or_default();
+        e.0 += 1;
+        e.1 += misaligned(r.2) as u32;
+        e.2 += odd(r.2) as u32;
+    }
+    let mut pixel: BTreeSet<u32> = blocks.iter().filter(|(_, b)| b.1 * 4 >= b.0).map(|(&k, _)| k).collect();
+    // A block of pixels that by chance holds only aligned in-range words passes that test (Counting
+    // on Zero: Zero and other sprites still black, Sonic X's too; user, 2026-11-01), so runs of
+    // sparse blocks are judged together: graphics are long stretches of a few chance words per
+    // block, real data is dense (Counting on Zero: 0x800A_D000-0x800C_2000, 40-780 words a block,
+    // almost none misaligned; its graphics 0x800C_3000-0x803A_3000, 1-19 a block, half misaligned).
+    // A dense block ends a run. In a run, words into the header count with the misaligned ones.
+    const SPARSE: u32 = 24;
+    const RUN_BLOCKS: usize = 4;
+    let mut run: Vec<u32> = vec![];
+    let (mut rn, mut rm) = (0, 0);
+    for (&k, &(n, _, m)) in blocks.iter().chain(std::iter::once((&u32::MAX, &(SPARSE, 0, 0)))) {
+        if n < SPARSE {
+            run.push(k);
+            rn += n;
+            rm += m;
+            continue;
+        }
+        if run.len() >= RUN_BLOCKS && rm * 4 >= rn {
+            pixel.extend(&run);
+        }
+        run.clear();
+        (rn, rm) = (0, 0);
+    }
+    let before = relocs.len();
+    relocs.retain(|r| r.1 != "word" || r.0 < span_hi || !pixel.contains(&(r.0 >> 12)));
+    let pixel_words = before - relocs.len();
+    if let Ok(how) = std::env::var("NS_PIXEL_LIST") {  // (=all: the blocks relocated too)
+        for (b, (n, m, _)) in &blocks {
+            let kind = if pixel.contains(b) { "pixel" } else { "data" };
+            if kind == "pixel" || how == "all" {
+                println!("  {kind} block {}: {n} words, {m} misaligned", hex(b << 12));
+            }
+        }
+    }
 
     println!("base {base:#010x}, {} native blobs from {}, {} seeds, {} entries accepted, {} rejected",
              native.len(), hex(native[0].0), seeds.len(), accepted.len(), rejected.len());
@@ -623,6 +679,7 @@ fn main() {
     println!("{} long immediates and {} data words to relocate; {} masks left alone; {} uncertain words after the native data",
              n_limm, relocs.len() - n_limm, masks.len(), uncertain);
     println!("{not_pointers} data words left alone: they point into erased padding");
+    println!("{pixel_words} data words left alone: misaligned targets, or in a block of such words (pixel data)");
     println!("{} data sections away from the code ({} words to relocate){}", sections.len(), section_words,
              sections.iter().map(|c| format!(" {}-{}", hex(c.0), hex(c.1))).collect::<String>());
     if verbose {
@@ -634,6 +691,74 @@ fn main() {
         }
         for e in rejected.iter().filter(|&&e| std::env::var("NS_NEAR").map_or(true, |n| e.abs_diff(u32::from_str_radix(&n, 16).unwrap()) < 0x400)).take(30) {
             println!("  rejected entry {}", hex(*e));
+        }
+    }
+    // LP loops whose LP_COUNT is written by the instruction right before the LP failed every time
+    // on a real Leapster 2 running from RAM (2026-11-01 loop test; fine from a cartridge, and in
+    // Ribbit). Where it is safe, the write swaps places with the instruction before it, which then
+    // stands between the write and the LP: that one is not a branch, jump or LP, is not in a
+    // delay slot, doesn't touch LP_COUNT, and nothing in the code jumps to either of the two.
+    // (prev address, prev length, write length) per swap; written as `lpswap` lines.
+    const LP_COUNT: u8 = 60;
+    let referenced: std::collections::HashSet<u32> = code.ins.values()
+        .filter(|i| (i.is_branch() || i.op == Op::Lp) && i.target != 0).map(|i| i.target)
+        .chain(relocs.iter().map(|r| r.2))
+        .collect();
+    let mut swaps: Vec<(u32, u32, u32)> = vec![];
+    for (&a, i) in &code.ins {
+        if i.op != Op::Lp {
+            continue;
+        }
+        let mut back = code.ins.range(..a).rev();
+        let (Some((&w, wr)), Some((&p, pr))) = (back.next(), back.next()) else { continue };
+        let before_p = back.next().map(|(_, b)| b);
+        let writes_count = |x: &Instr| x.dst == Dst::Reg(LP_COUNT);
+        let safe = writes_count(wr) && wr.next() == a && pr.next() == w
+            && !pr.is_branch() && pr.op != Op::Lp && !writes_count(pr) && pr.reg_reads() & 1 << LP_COUNT == 0
+            && wr.reg_reads() & 1 << LP_COUNT == 0
+            && !before_p.is_some_and(|b| b.delay && b.next() == p)
+            && !referenced.contains(&w) && !referenced.contains(&p);
+        if safe {
+            swaps.push((p, pr.len, wr.len));
+        }
+    }
+    // --loops: every LP in verified code, with its body's length and the instruction before it.
+    // On a real Leapster 2 (2026-11-01 loop test) an LP whose LP_COUNT is written by the instruction
+    // right before it always failed, and one-instruction bodies sometimes did with interrupts on.
+    if loops {
+        let (mut late, mut one) = (0, 0);
+        let mut prev: Option<(u32, &Instr)> = None;
+        for (&a, i) in &code.ins {
+            if i.op == Op::Lp {
+                let body = code.ins.range(i.next()..i.target).count();
+                let before = prev.map(|(_, p)| disassemble(p)).unwrap_or_default();
+                let writes = before.split_whitespace().nth(1).is_some_and(|o| o.starts_with("lp_count"));
+                late += writes as u32;
+                one += (body == 1) as u32;
+                let tag = if writes { "LATE" } else if body == 1 { "ONE " } else { "ok  " };
+                println!("  lp {} {} end {} body {:3}  before: {}", tag, hex(a), hex(i.target), body, before);
+                if writes {
+                    let ctx: Vec<_> = code.ins.range(..a).rev().take(4).collect();
+                    for (&b, p) in ctx.into_iter().rev() {
+                        println!("       {} ({} bytes) {}", hex(b), p.len, disassemble(p));
+                    }
+                }
+            }
+            prev = Some((a, i));
+        }
+        println!("loops: {late} with LP_COUNT written right before ({} fixed by a swap), {one} with one-instruction bodies",
+                 swaps.len());
+        // NS_DUMP=LO-HI (hex): the verified code in that range, and what jumps into it.
+        if let Some((lo, hi)) = std::env::var("NS_DUMP").ok().and_then(|r| {
+            let (l, h) = r.split_once('-')?;
+            Some((u32::from_str_radix(l, 16).ok()?, u32::from_str_radix(h, 16).ok()?))
+        }) {
+            for (&b, x) in code.ins.range(lo..hi) {
+                println!("    {} {}{}", hex(b), disassemble(x), if referenced.contains(&b) { "   <- target" } else { "" });
+            }
+            for x in code.ins.values().filter(|x| x.is_branch() && (lo..hi).contains(&x.target)) {
+                println!("    from {}: {}", hex(x.addr), disassemble(x));
+            }
         }
     }
     // Every named native function must decode: otherwise the code is not understood.
@@ -649,7 +774,12 @@ fn main() {
         for (a, k, v) in &relocs {
             out += &format!("{:x} {k} {v:x}\n", a - base);
         }
+        // `OFFSET lpswap LENGTHS`: swap the instruction at OFFSET (length LENGTHS >> 8) with the
+        // LP_COUNT write after it (length LENGTHS & 0xFF), after the relocations are applied.
+        for (p, pl, wl) in &swaps {
+            out += &format!("{:x} lpswap {:x}\n", p - base, pl << 8 | wl);
+        }
         std::fs::write(&p, out).expect("write relocs");
-        println!("wrote {} relocations to {p}", relocs.len());
+        println!("wrote {} relocations and {} loop fixes to {p}", relocs.len(), swaps.len());
     }
 }

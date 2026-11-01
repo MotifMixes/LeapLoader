@@ -13,11 +13,16 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// Zipped dumps are unpacked here, inside the output folder, for mkcard
-/// (which reads .bin files), with the menu's music and welcome sound beside
-/// them; the folder is
-/// removed after the build.
-const STAGING: &str = ".leaploader-unzipped";
+/// Zipped dumps are unpacked here, in the system's temporary folder, for
+/// mkcard (which reads .bin files), with the menu's music and welcome sound
+/// beside them; the folder is removed after the build. Not inside the output
+/// folder: built onto the Leapster 2 over USB, writing an 8 MiB dump there
+/// held the window (not responding) and mkcard then read it back over USB.
+const STAGING: &str = "leaploader-unzipped";
+
+fn staging_dir() -> PathBuf {
+    std::env::temp_dir().join(format!("{STAGING}-{}", std::process::id()))
+}
 
 /// The research folder: the setting, else the first `research` folder with
 /// mkcard.py beside the program or above it (a release would ship it next
@@ -199,7 +204,8 @@ impl Build {
                 out.display()
             );
         }
-        let staging = out.join(STAGING);
+        let staging = staging_dir();
+        let _ = std::fs::remove_dir_all(&staging);  // (left by a build that was stopped)
         let paths = stage_zips(dumps, &staging)?;
         let music = staging.join("menumusic.mid");
         std::fs::create_dir_all(&staging)?;

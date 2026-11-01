@@ -266,8 +266,9 @@ def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="L
         handle_limit = max([0] + [struct.unpack_from("<I", src, t - CART_BASE + 12)[0]
                                       for t in table_addresses(src)
                                       if struct.unpack_from("<I", src, t - CART_BASE + 8)[0] == CART_BASE])
+        swaps = [(o, v) for o, kind, v in relocs if kind == "lpswap"]
         for o, kind, v in relocs:
-            if o in done:
+            if o in done or kind == "lpswap":
                 continue
             # Data words from 0x8000_0000 up to the largest table's handle count (no more: Foster's
             # Home points at 0x8000_00BC, past its 29 handles) are resource handles (0x8000_0000 + index: Go Diego Go's 0x100D lists hold 571, Rock the World's
@@ -288,6 +289,15 @@ def convert(src, save_path=None, relocs=None, strict_checksum=True, menu_name="L
                 struct.pack_into("<HH", d, o, nv >> 16, nv & 0xFFFF)
                 limm.add(o)
             edits.append((o, v, nv))
+        # Loops whose LP_COUNT write comes right before the LP fail on a real Leapster 2 running
+        # from RAM (nativescan, `lpswap`): the write swaps places with the instruction before it,
+        # bytes as relocated. A long immediate in that instruction moves with it.
+        for o, lens in swaps:
+            a, b = lens >> 8, lens & 0xFF
+            d[o:o + a + b] = d[o + a:o + a + b] + d[o:o + a]
+            moved = {x for x in limm if o <= x < o + a + b}
+            limm -= moved
+            limm |= {x + b if x < o + a else x - a for x in moved}
 
     if big is not None:
         import bigimage
@@ -441,17 +451,26 @@ def add_saves(d, movie_table, main_handle, ee_size, save_path, pointers=(), nati
     leap = u32(0x140) - SD_BASE
     n_dir = struct.unpack_from("<H", d, leap + 6)[0]
     has_1009 = any(struct.unpack_from("<H", d, leap + 0x20 + 8 * i)[0] == 0x1009 for i in range(n_dir))
-    stub_len = len(eestub.build(SD_BASE, ee_size, save_path, chip_fill)) if chip else 0
     n_1009 = find_dir_entry(d, 0x1009)[1] if chip and has_1009 else 0
     dir_len = 0 if has_1009 else 0x20 + 8 * (n_dir + 1) + 4
-    size = lambda at: ((((at + len(m2) + 3) & ~3) + len(overlay) + 3) & ~3) + table_len - at \
-        + (stub_len + 8 * (n_1009 + 1) + 8 + dir_len if chip else 0)
-    at = free_space(d, size(0) + 16, pointers)
+    # The stub with its own HINT + A + B prompt (eestub.prompt_rle, ~4.7 KB more) where it fits, else without.
+    stub_prompt = menu_name if chip else None
+    while True:
+        stub_len = len(eestub.build(SD_BASE, ee_size, save_path, chip_fill, stub_prompt)) if chip else 0
+        size = lambda at: ((((at + len(m2) + 3) & ~3) + len(overlay) + 3) & ~3) + table_len - at \
+            + (stub_len + 8 * (n_1009 + 1) + 8 + dir_len if chip else 0)
+        try:
+            at = free_space(d, size(0) + 16, pointers)
+            break
+        except Unsupported:
+            if stub_prompt is None:
+                raise
+            stub_prompt = None
     o_at = (at + len(m2) + 3) & ~3
     t_at = (o_at + len(overlay) + 3) & ~3
     if chip:
         s_at = (t_at + table_len + 3) & ~3
-        stub = eestub.build(SD_BASE + s_at, ee_size, save_path, chip_fill)
+        stub = eestub.build(SD_BASE + s_at, ee_size, save_path, chip_fill, stub_prompt)
         d[s_at:s_at + len(stub)] = stub
         n_at = (s_at + len(stub) + 3) & ~3
         if has_1009:

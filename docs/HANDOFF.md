@@ -12,7 +12,9 @@
 3. Volume display always shows one or two bars (which screen/game not stated yet).
 4. Junie B. Jones and Mr. Pencil: drawings ("doodles") can't be saved, the games use Flash memory
    save routines (not the EEPROM natives the RAM chip covers).
-5. Counting on Zero: playable, graphical glitches, HINT + A + B does not go back.
+5. Counting on Zero: playable. Black sprites FIXED in 0.2.6 (user tested; how-it-works "Pixel data is left
+   alone"). HINT + A + B does not go back: not rechecked. The prompt flickers (Sonic X in Ribbit: missing 5-10 ms
+   about once a game frame, timer unaffected; a key released 120 ms restarts the bar, cause unknown).
 6. ROX alpha builds don't work on the Leapster 2 (known: restart loop, HANDOFF "Incompatible").
 7. Scholastic Math Missions: the LFC voice channel and the embedded Flash player's sound play at once.
 
